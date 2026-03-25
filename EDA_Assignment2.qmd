@@ -1,35 +1,49 @@
 ---
-_---
 title: "EDA Assignmemnt2"
 author: "Pamela Afful"
 format: pdf
 editor: visual
 ---
 
-```{r}
+```{r, read_lib}
 library(lubridate)
 library(dplyr)
 ```
 
-```{r}
-query=read.csv("C:/Users/affup001/Downloads/query (1).csv")
-earth_quakes=read.csv("C:/Users/affup001/Downloads/Earthquakes 1965 - 2016.csv")
-str(earth_quakes)
+# Data Wrangling
+
+Read in the files
+
+```{r,read_data,echo=FALSE,eval=TRUE}
+
+query=read.csv("query.csv")
+earth_quakes=read.csv("Earthquakes_1965_2016.csv")
+
 
 ```
 
-```{r}
+Check Dataset Details
+
+```{r,data_det,echo=FALSE,eval=TRUE}
+# check query df details
 str(query)
+str(earth_quakes)
 ```
 
-```{r}
+Convert time characters to date variables for both dataframes
+
+Query
+
+```{r,date_con,echo=FALSE,eval=FALSE}
 # Change date columns to datetime
 query$dt_time=ymd_hms(query$time)
 
 
 ```
 
-```{r}
+earthquakes
+
+```{r,date_con_2,echo=FALSE,eval=TRUE}
 # Split data into 2 then put back together
 
 earth_quakes$dt_date=mdy(earth_quakes$Date)
@@ -44,22 +58,65 @@ earth_quakes_final=rbind(earth_quakes_non_na,earth_quakes_non_na)
 head(earth_quakes_final)
 ```
 
-```{r}
+Create truncated date variables, only including the date part
+
+```{r,truc_date,echo=FALSE,eval=TRUE}
 # Create a truncated date function with no time elements 
 earth_quakes_final$date_final=date(earth_quakes_final$dt_date)
 earth_quakes_final %>% select(Date,dt_date,date_final)
 ```
 
-```{r}
+```{r,trunc_date2,echo=FALSE,eval=TRUE}
 # Do the same for the query csv
 query$date_final=date(query$dt_time)
 query %>% select(time, dt_time,date_final)
 ```
 
-```{r}
-names(query)
+Transform column names to lower case for both dataframes
+
+```{r,lower_col,echo=FALSE,eval=TRUE}
+colnames(query)=tolower(colnames(query))
+colnames(query)
 ```
 
-```{r}
-sapply(names(earth_quakes_final), tolower,simplify=array)
+Ensure to remove the period character in the earth quake data in addition to converting to lower case
+
+```{r,lower_col2,echo=FALSE,eval=TRUE}
+# lower the case of the columns names in earth quake df and remove period character in column names
+colnames(earth_quakes_final)=tolower(colnames(earth_quakes_final))
+
+colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
+
+colnames(earth_quakes_final)
+```
+
+Lower the case of the values in the ID column of the earth quake dataset
+
+```{r,lower_col3,echo=FALSE,eval=TRUE}
+# lower the case of the id values in the id column  of the earthquakes dataframe
+earth_quakes_final %>% select(id)
+earth_quakes_final$id=tolower(earth_quakes_final$id)
+earth_quakes_final %>% select(id)
+```
+
+Join the dataframes
+
+```{r,df_join,echo=FALSE,eval=TRUE}
+# find common columns in both dataframes
+eq_cols=names(earth_quakes_final)
+query_cols=names(query)
+
+join_cols=intersect(eq_cols,query_cols)
+join_cols
+
+df_final=full_join(earth_quakes_final,query, by=join_cols)
+head(df_final)
+```
+
+Filter for just earthquake data
+
+```{r,eq_fil,echo=FALSE,eval=TRUE}
+# filter for earthqauke data
+df_earthquake=df_final %>% filter(type=='Earthquake')
+df_earthquake
 ```
