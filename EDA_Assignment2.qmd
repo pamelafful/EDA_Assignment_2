@@ -1,0 +1,65 @@
+---
+_---
+title: "EDA Assignmemnt2"
+author: "Pamela Afful"
+format: pdf
+editor: visual
+---
+
+```{r}
+library(lubridate)
+library(dplyr)
+```
+
+```{r}
+query=read.csv("C:/Users/affup001/Downloads/query (1).csv")
+earth_quakes=read.csv("C:/Users/affup001/Downloads/Earthquakes 1965 - 2016.csv")
+str(earth_quakes)
+
+```
+
+```{r}
+str(query)
+```
+
+```{r}
+# Change date columns to datetime
+query$dt_time=ymd_hms(query$time)
+
+
+```
+
+```{r}
+# Split data into 2 then put back together
+
+earth_quakes$dt_date=mdy(earth_quakes$Date)
+earth_quakes_na=earth_quakes %>% filter( is.na(dt_date)) %>% 
+  mutate(dt_date=ymd_hms(Date))
+
+earth_quakes_non_na=earth_quakes %>% filter(!is.na(dt_date))
+
+# concat back together
+earth_quakes_final=rbind(earth_quakes_non_na,earth_quakes_non_na)
+
+head(earth_quakes_final)
+```
+
+```{r}
+# Create a truncated date function with no time elements 
+earth_quakes_final$date_final=date(earth_quakes_final$dt_date)
+earth_quakes_final %>% select(Date,dt_date,date_final)
+```
+
+```{r}
+# Do the same for the query csv
+query$date_final=date(query$dt_time)
+query %>% select(time, dt_time,date_final)
+```
+
+```{r}
+names(query)
+```
+
+```{r}
+sapply(names(earth_quakes_final), tolower,simplify=array)
+```
