@@ -3,6 +3,12 @@ title: "EDA Assignmemnt2"
 author: "Pamela Afful"
 format: pdf
 editor: visual
+
+execute: 
+  cache: true
+  warning: false
+  message: false
+  echo: false
 ---
 
 ```{r, read_lib}
@@ -26,97 +32,108 @@ Check Dataset Details
 
 ```{r,data_det,echo=FALSE,eval=TRUE}
 # check query df details
-str(query)
-str(earth_quakes)
+dim(query)
+dim(earth_quakes)
 ```
 
 Convert time characters to date variables for both dataframes
 
-Query
+Create truncated date variables, only including the date part
+
+Query data
 
 ```{r,date_con,echo=FALSE,eval=FALSE}
 # Change date columns to datetime
-query$dt_time=ymd_hms(query$time)
+query$dt_date_time=ymd_hms(query$time)
+query$date_final=date(query$dt_time)
 
 
+head(query %>% select(time,dt_date_time,date_final))
 ```
 
-earthquakes
+Earthquakes data
 
 ```{r,date_con_2,echo=FALSE,eval=TRUE}
 # Split data into 2 then put back together
 
-earth_quakes$dt_date=mdy(earth_quakes$Date)
-earth_quakes_na=earth_quakes %>% filter( is.na(dt_date)) %>% 
-  mutate(dt_date=ymd_hms(Date))
+earth_quakes_final=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time)))
+earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
 
-earth_quakes_non_na=earth_quakes %>% filter(!is.na(dt_date))
-
-# concat back together
-earth_quakes_final=rbind(earth_quakes_non_na,earth_quakes_non_na)
-
-head(earth_quakes_final)
-```
-
-Create truncated date variables, only including the date part
-
-```{r,truc_date,echo=FALSE,eval=TRUE}
-# Create a truncated date function with no time elements 
-earth_quakes_final$date_final=date(earth_quakes_final$dt_date)
-earth_quakes_final %>% select(Date,dt_date,date_final)
-```
-
-```{r,trunc_date2,echo=FALSE,eval=TRUE}
-# Do the same for the query csv
-query$date_final=date(query$dt_time)
-query %>% select(time, dt_time,date_final)
+# earth_quakes_final$date_final=date(earth_quakes_final$dt_time)
+head(earth_quakes_final %>% select(Date,Time,dt_date_time,date_final))
 ```
 
 Transform column names to lower case for both dataframes
 
+Also, remove the dot character, "." from the column names of the earthquake data and lower the case of the values in the id column for the earthquakes data
+
 ```{r,lower_col,echo=FALSE,eval=TRUE}
+# lower the case of column names
 colnames(query)=tolower(colnames(query))
-colnames(query)
-```
 
-Ensure to remove the period character in the earth quake data in addition to converting to lower case
 
-```{r,lower_col2,echo=FALSE,eval=TRUE}
 # lower the case of the columns names in earth quake df and remove period character in column names
 colnames(earth_quakes_final)=tolower(colnames(earth_quakes_final))
-
 colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 
-colnames(earth_quakes_final)
-```
-
-Lower the case of the values in the ID column of the earth quake dataset
-
-```{r,lower_col3,echo=FALSE,eval=TRUE}
-# lower the case of the id values in the id column  of the earthquakes dataframe
-earth_quakes_final %>% select(id)
+# lower the case of the ID values
 earth_quakes_final$id=tolower(earth_quakes_final$id)
-earth_quakes_final %>% select(id)
 ```
 
-Join the dataframes
+Finally join the dataframes on common column values
 
 ```{r,df_join,echo=FALSE,eval=TRUE}
+
 # find common columns in both dataframes
 eq_cols=names(earth_quakes_final)
 query_cols=names(query)
 
 join_cols=intersect(eq_cols,query_cols)
-join_cols
+join_cols=join_cols[join_cols!='time']
 
-df_final=full_join(earth_quakes_final,query, by=join_cols)
-head(df_final)
+df=full_join(earth_quakes_final,query, by=join_cols)
+
+df%>% select(any_of(join_cols)) %>% head()
 ```
 
-Filter for just earthquake data
+Now, filter for just earthquake data
 
 ```{r,eq_fil,echo=FALSE,eval=TRUE}
 # filter for earthqauke data
-df_earthquake=df_final %>% filter(type=='Earthquake')
-df_earthquake
+df_earthquake=df %>% filter(type=='Earthquake')
+
+```
+
+### Creating Magnitude Scale
+
+```{r}
+df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=1 & magnitude<=1.9~'Micro',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=2 & magnitude<=2.9~'Minor',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=3 & magnitude<=3.9~'Slight',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=4 & magnitude<=4.9~'Light',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=5 & magnitude<=5.9~'Moderate',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=6 & magnitude<=6.9~'Strong',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=7 & magnitude<=7.9~'Major',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=8 & magnitude<=8.9~'Great',
+                                                  magnitudetype=='ML' &
+                                                  magnitude>=9 & magnitude<=9.9~'Extreme',
+                                                  
+                                                  
+                                                  
+                                                    
+)
+                         ) %>% 
+  pull(richter_scale)
+
+df_earthquake %>% filter(magnitudetype=='ML') %>% 
+  select(magnitude,magnitudetype,richter_scale) %>% head()
 ```
