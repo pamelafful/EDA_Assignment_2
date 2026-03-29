@@ -106,7 +106,7 @@ df_earthquake=df %>% filter(type=='Earthquake')
 
 ### Creating Magnitude Scale
 
-```{r}
+```{r,mag_cat,echo=FALSE,eval=TRUE}
 df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
                                                   #magnitudetype=='ML' &
                                                   magnitude>=1 & magnitude<=1.9~'Micro',
@@ -135,17 +135,14 @@ df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
                          ) %>% 
   pull(richter_scale)
 
-df_earthquake %>% filter(magnitudetype=='ML') %>% 
-  filter(is.na(richter_scale) ) %>% 
-  select(magnitude,richter_scale)
 
 ```
 
 Find count/frequency of earth quake types per magnitude
 
-```{r}
+```{r,bar_plot,echo=FALSE,eval=TRUE}
 
-
+summary(df_earthquake$magnitude)
 
 
 df_earthquake %>%  
@@ -167,9 +164,4 @@ df_earthquake %>%
 
 
   
-```
-
-```{r}
-summary(df_earthquake$magnitude)
-
 ```
