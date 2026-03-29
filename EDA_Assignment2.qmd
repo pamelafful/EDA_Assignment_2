@@ -14,6 +14,7 @@ execute:
 ```{r, read_lib}
 library(lubridate)
 library(dplyr)
+library(ggplot2)
 ```
 
 # Data Wrangling
@@ -45,10 +46,9 @@ Query data
 ```{r,date_con,echo=FALSE,eval=FALSE}
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
-query$date_final=date(query$dt_time)
+query$date_final=date(query$dt_date_time)
 
 
-head(query %>% select(time,dt_date_time,date_final))
 ```
 
 Earthquakes data
@@ -108,24 +108,25 @@ df_earthquake=df %>% filter(type=='Earthquake')
 
 ```{r}
 df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=1 & magnitude<=1.9~'Micro',
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=2 & magnitude<=2.9~'Minor',
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=3 & magnitude<=3.9~'Slight',
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=4 & magnitude<=4.9~'Light',
-                                                  magnitudetype=='ML' &
-                                                  magnitude>=5 & magnitude<=5.9~'Moderate',
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
+                                                  magnitude>=5 & magnitude<=5.99~'Moderate',
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=6 & magnitude<=6.9~'Strong',
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=7 & magnitude<=7.9~'Major',
-                                                  magnitudetype=='ML' &
+                                                  #magnitudetype=='ML' &
                                                   magnitude>=8 & magnitude<=8.9~'Great',
-                                                  magnitudetype=='ML' &
-                                                  magnitude>=9 & magnitude<=9.9~'Extreme',
+                                                  #magnitudetype=='ML' &
+                                                  magnitude>=9 & magnitude<=9.9~'Extreme'
+                                                  #magnitudetype!='ML'~'Other',
                                                   
                                                   
                                                   
@@ -135,5 +136,40 @@ df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
   pull(richter_scale)
 
 df_earthquake %>% filter(magnitudetype=='ML') %>% 
-  select(magnitude,magnitudetype,richter_scale) %>% head()
+  filter(is.na(richter_scale) ) %>% 
+  select(magnitude,richter_scale)
+
+```
+
+Find count/frequency of earth quake types per magnitude
+
+```{r}
+
+
+
+
+df_earthquake %>%  
+  distinct(id,richter_scale) %>% 
+  ggplot(aes(x=richter_scale))+
+  geom_bar()+
+  labs(title = "Number of Earthquake Per Magnitude Category",
+       x = "magnitude category") +
+  theme_minimal()
+
+df_earthquake %>%  
+  select(magnitude,richter_scale) %>% 
+  ggplot(aes(x=magnitude,color=richter_scale))+
+  geom_histogram(position = "identity", alpha = 0.6, binwidth = 0.5)+
+  labs(title = "Earth Quake Magnitudes Per Richter Scale Category (All Magnitude Types)",
+       x = "magnitude") +
+  theme_minimal()
+
+
+
+  
+```
+
+```{r}
+summary(df_earthquake$magnitude)
+
 ```
