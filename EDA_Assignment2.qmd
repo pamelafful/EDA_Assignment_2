@@ -15,6 +15,7 @@ execute:
 library(lubridate)
 library(dplyr)
 library(ggplot2)
+library(ggpubr)
 ```
 
 # Data Wrangling
@@ -47,7 +48,8 @@ Query data
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
 query$date_final=date(query$dt_date_time)
-
+query=query %>% rename(magnitudetype=magtype) %>% 
+  mutate(magnitudetype=toupper(magnitudetype))
 
 ```
 
@@ -91,7 +93,7 @@ query_cols=names(query)
 join_cols=intersect(eq_cols,query_cols)
 join_cols=join_cols[join_cols!='time']
 
-df=full_join(earth_quakes_final,query, by=join_cols)
+df=left_join(earth_quakes_final,query, by=join_cols)
 
 df%>% select(any_of(join_cols)) %>% head()
 ```
@@ -147,6 +149,7 @@ summary(df_earthquake$magnitude)
 
 df_earthquake %>%  
   distinct(id,richter_scale) %>% 
+  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
   ggplot(aes(x=richter_scale))+
   geom_bar()+
   labs(title = "Number of Earthquake Per Magnitude Category",
@@ -164,4 +167,59 @@ df_earthquake %>%
 
 
   
+```
+
+```{r}
+summary(df_earthquake$magnitude)
+
+df_earthquake %>%  
+  select(magnitude,richter_scale) %>% 
+  ggplot(aes(y=magnitude))+
+  geom_boxplot()+
+  labs(title = "Distribution of Earthquake Magnitudes",
+       y = "magnitude") +
+  theme_minimal()
+
+
+```
+
+```{r}
+
+df_earthquake %>%  
+  select(magnitude,depth,richter_scale) %>% 
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  ggplot(aes(x=richter_scale,y=depth))+
+  geom_boxplot()+
+  labs(title = "Depth vs Earthquake Category",
+       y = 'earth quake depth') +
+  theme_minimal()
+
+```
+
+```{r}
+df_earthquake %>% filter(!is.na(horizontaldistance)) %>% 
+
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  ggplot(aes(x=horizontaldistance,color=richter_scale))+
+  geom_histogram(position = "identity", alpha = 0.6, binwidth = 0.5)+
+  labs(title = "Depth vs Earthquake Magnitude",
+       y = "horizontal diatnce") +
+  theme_minimal()
+
+df_earthquake %>%  
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  ggplot(aes(x=horizontaldistance,y=magnitude))+
+  stat_cor(method = "pearson", label.x = 20, label.y = 8)+
+  geom_point()+
+  labs(title = "Depth vs Earthquake Category",
+       y = 'earth quake depth') +
+  theme_minimal()
+
+```
+
+```{r}
+df_earthquake %>% distinct(magnitudetype)
+names(df_earthquake)
+
+df_earthquake %>% filter( !is.na(mag)  )
 ```
