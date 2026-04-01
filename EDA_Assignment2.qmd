@@ -15,7 +15,7 @@ execute:
 library(lubridate)
 library(dplyr)
 library(ggplot2)
-library(ggpubr)
+#library(ggpubr)
 ```
 
 # Data Wrangling
@@ -44,12 +44,14 @@ Create truncated date variables, only including the date part
 
 Query data
 
+```{r}
+names(query)
+```
+
 ```{r,date_con,echo=FALSE,eval=FALSE}
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
 query$date_final=date(query$dt_date_time)
-query=query %>% rename(magnitudetype=magtype) %>% 
-  mutate(magnitudetype=toupper(magnitudetype))
 
 ```
 
@@ -80,6 +82,14 @@ colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 
 # lower the case of the ID values
 earth_quakes_final$id=tolower(earth_quakes_final$id)
+
+# rename some columns in query dataframe
+query=query %>% rename(magnitudetype=magtype) %>% 
+  mutate(magnitudetype=toupper(magnitudetype),
+         rootmeansquare=rms_query)
+
+
+
 ```
 
 Finally join the dataframes on common column values
@@ -98,12 +108,41 @@ df=left_join(earth_quakes_final,query, by=join_cols)
 df%>% select(any_of(join_cols)) %>% head()
 ```
 
-Now, filter for just earthquake data
+Now, filter for just earthquake datab
 
 ```{r,eq_fil,echo=FALSE,eval=TRUE}
 # filter for earthqauke data
 df_earthquake=df %>% filter(type=='Earthquake')
 
+
+# Drop cols that have too many NA values or have repeated counterpart columns
+names(df_earthquake)
+
+keep_cols=c('date',"longitude","latitude","depthseismicstations", "magnitude",
+            "magnitudeseismicstations","azimuthalgap","rootmeansquare",
+            "id"
+            )
+
+df_earthquake %>% select(mag,magnitude)
+int_ids=intersect(q_ids,eq_ids)
+
+```
+
+```{r}
+
+names(earth_quakes_final)
+
+earth_quakes_final %>% filter(id== 'us10007ntd') %>%
+    select(id,magnitude,magnitudetype)
+
+names(earth_quakes_final)
+```
+
+```{r}
+names(query)
+
+query %>% filter(id== 'us10007ntd') %>%
+    select(id,mag,magnitudetype)
 ```
 
 ### Creating Magnitude Scale
@@ -206,20 +245,58 @@ df_earthquake %>% filter(!is.na(horizontaldistance)) %>%
        y = "horizontal diatnce") +
   theme_minimal()
 
-df_earthquake %>%  
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  ggplot(aes(x=horizontaldistance,y=magnitude))+
-  stat_cor(method = "pearson", label.x = 20, label.y = 8)+
-  geom_point()+
-  labs(title = "Depth vs Earthquake Category",
-       y = 'earth quake depth') +
-  theme_minimal()
+# df_earthquake %>%  
+#     mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+#   ggplot(aes(x=horizontaldistance,y=magnitude))+
+#   stat_cor(method = "pearson", label.x = 20, label.y = 8)+
+#   geom_point()+
+#   labs(title = "Depth vs Earthquake Category",
+#        y = 'earth quake depth') +
+#   theme_minimal()
+
+
 
 ```
 
 ```{r}
-df_earthquake %>% distinct(magnitudetype)
-names(df_earthquake)
+# Largest earthquakes in terms of magnitude
+# Look at earthquakes in the 3rd quartile and higher
+third_qaurtile=summary(df_earthquake$magnitude)[[5]]
 
-df_earthquake %>% filter( !is.na(mag)  )
+
+df_earthquake %>% filter(magnitude>third_qaurtile) %>% 
+  group_by(richter_scale) %>% 
+  
+
+```
+
+```{r}
+query %>% colnames()
+
+earth_quakes_final %>% filter( !is.na(magnitudeseismicstations)) %>% 
+  select (magnitudeseismicstations)
+```
+
+```{r}
+q_ids=query %>% distinct(id) %>% pull()
+eq_ids=earth_quakes_final %>% distinct(id) %>% pull()
+
+int_ids=intersect(q_ids,eq_ids)
+
+df_earthquake %>% filter(id %in%int_ids ) %>% 
+  select(id,nst,magnitudeseismicstations,rootmeansquare,rms)
+
+# earth_quakes_final %>% filter(id %in%int_ids ) %>% 
+#   select(id,magnitudeseismicstations)
+
+
+
+```
+
+# Temporal Data Analysis
+
+```{r}
+
+
+
 ```
