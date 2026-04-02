@@ -15,7 +15,8 @@ execute:
 library(lubridate)
 library(dplyr)
 library(ggplot2)
-#library(ggpubr)
+library(ggpubr)
+library(patchwork)
 ```
 
 # Data Wrangling
@@ -42,12 +43,6 @@ Convert time characters to date variables for both dataframes
 
 Create truncated date variables, only including the date part
 
-Query data
-
-```{r}
-names(query)
-```
-
 ```{r,date_con,echo=FALSE,eval=FALSE}
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
@@ -60,11 +55,19 @@ Earthquakes data
 ```{r,date_con_2,echo=FALSE,eval=TRUE}
 # Split data into 2 then put back together
 
-earth_quakes_final=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time)))
+# earth_quakes_final=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time)))
+# earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
+
+
+earth_quakes$dt_date_time=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time))) %>% pull(dt_date_time)
+
+earth_quake_na=earth_quakes %>% filter(is.na(dt_date_time))
+earth_quake_non_na=earth_quakes %>% filter(!is.na(dt_date_time))
+earth_quake_na$dt_date_time=earth_quake_na %>% mutate(dt_date_time=ymd_hms(Date)) %>% pull(dt_date_time) 
+
+earth_quakes_final=rbind(earth_quake_na,earth_quake_non_na)
 earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
 
-# earth_quakes_final$date_final=date(earth_quakes_final$dt_time)
-head(earth_quakes_final %>% select(Date,Time,dt_date_time,date_final))
 ```
 
 Transform column names to lower case for both dataframes
@@ -84,9 +87,9 @@ colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 earth_quakes_final$id=tolower(earth_quakes_final$id)
 
 # rename some columns in query dataframe
-query=query %>% rename(magnitudetype=magtype) %>% 
-  mutate(magnitudetype=toupper(magnitudetype),
-         rootmeansquare=rms_query)
+# query=query %>% rename(magnitudetype=magtype) %>% 
+#   mutate(magnitudetype=toupper(magnitudetype),
+#          rootmeansquare=rms_query)
 
 
 
@@ -118,31 +121,12 @@ df_earthquake=df %>% filter(type=='Earthquake')
 # Drop cols that have too many NA values or have repeated counterpart columns
 names(df_earthquake)
 
-keep_cols=c('date',"longitude","latitude","depthseismicstations", "magnitude",
-            "magnitudeseismicstations","azimuthalgap","rootmeansquare",
-            "id"
-            )
+# keep_cols=c('date',"longitude","latitude","depthseismicstations", "magnitude",
+#             "magnitudeseismicstations","azimuthalgap","rootmeansquare",
+#             "id","dt_date_time",
+#             )
 
-df_earthquake %>% select(mag,magnitude)
-int_ids=intersect(q_ids,eq_ids)
 
-```
-
-```{r}
-
-names(earth_quakes_final)
-
-earth_quakes_final %>% filter(id== 'us10007ntd') %>%
-    select(id,magnitude,magnitudetype)
-
-names(earth_quakes_final)
-```
-
-```{r}
-names(query)
-
-query %>% filter(id== 'us10007ntd') %>%
-    select(id,mag,magnitudetype)
 ```
 
 ### Creating Magnitude Scale
@@ -222,7 +206,7 @@ df_earthquake %>%
 
 ```
 
-```{r}
+```{r,depth_mag}
 
 df_earthquake %>%  
   select(magnitude,depth,richter_scale) %>% 
@@ -233,9 +217,23 @@ df_earthquake %>%
        y = 'earth quake depth') +
   theme_minimal()
 
+
+df_earthquake %>% filter(!is.na(depth)) %>% 
+
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  group_by(richter_scale) %>% 
+  summarise(mean_depth=mean(depth)) %>% 
+  
+  ggplot(aes(x=richter_scale,y=mean_depth))+
+  geom_col(stat = 'identity')+
+  labs(title = "Average horizontal distance per earthquake category",
+       y = "depth") +
+  theme_minimal()
+
 ```
 
-```{r}
+```{r,dist_mag}
+
 df_earthquake %>% filter(!is.na(horizontaldistance)) %>% 
 
     mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
@@ -245,49 +243,69 @@ df_earthquake %>% filter(!is.na(horizontaldistance)) %>%
        y = "horizontal diatnce") +
   theme_minimal()
 
-# df_earthquake %>%  
-#     mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-#   ggplot(aes(x=horizontaldistance,y=magnitude))+
-#   stat_cor(method = "pearson", label.x = 20, label.y = 8)+
-#   geom_point()+
-#   labs(title = "Depth vs Earthquake Category",
-#        y = 'earth quake depth') +
-#   theme_minimal()
+
+df_earthquake %>% filter(!is.na(horizontaldistance)) %>% 
+
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  group_by(richter_scale) %>% 
+  summarise(mean_hd=mean(horizontaldistance)) %>% 
+  
+  ggplot(aes(x=richter_scale,y=mean_hd))+
+  geom_col(stat = 'identity')+
+  labs(title = "Average horizontal distance per earthquake category",
+       y = "horizontal diatnce") +
+  theme_minimal()
+
+df_earthquake %>%
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+  ggplot(aes(x=magnitude,y=horizontaldistance))+
+  stat_cor(method = "pearson", label.x =6, label.y = 30)+
+  geom_point()+
+  geom_smooth()+
+  labs(title = "Horizontal Distance vs Magnitude",x='magnitude',
+       y = 'distance') +
+  theme_minimal()
 
 
+
+
+df_earthquake %>%
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+  ggplot(aes(x=magnitude,y=depth))+
+  stat_cor(method = "pearson", label.x =8.5, label.y = 600)+
+  geom_point()+
+  geom_smooth()+
+  labs(title = "Depth vs Magnitude",x='magnitude',
+       y = 'depth') +
+  theme_minimal()
 
 ```
 
 ```{r}
 # Largest earthquakes in terms of magnitude
 # Look at earthquakes in the 3rd quartile and higher
-third_qaurtile=summary(df_earthquake$magnitude)[[5]]
+third_qaurtile=summary(df_earthquake$magnitude)[[4]] # the mean
 
 
-df_earthquake %>% filter(magnitude>third_qaurtile) %>% 
+gr_mag_3rd_quatile=df_earthquake %>% 
+  group_by(richter_scale) %>%
+  summarize(grouped_mean_mg=mean(magnitude))
+
+left_join(df_earthquake,gr_mag_3rd_quatile, by ='richter_scale') %>% 
+  mutate( is_greater=
+  case_when(magnitude>=grouped_mean_mg~ 1,
+            magnitude<grouped_mean_mg~0)
+  
+  ) %>% 
+  select(id,richter_scale,magnitude,grouped_mean_mg,is_greater) %>% 
   group_by(richter_scale) %>% 
+  summarize(total_ids=length(id),total_gr=sum(is_greater)  ) %>% 
+  mutate(percentage=(total_gr/total_ids))
   
 
-```
 
-```{r}
-query %>% colnames()
 
-earth_quakes_final %>% filter( !is.na(magnitudeseismicstations)) %>% 
-  select (magnitudeseismicstations)
-```
 
-```{r}
-q_ids=query %>% distinct(id) %>% pull()
-eq_ids=earth_quakes_final %>% distinct(id) %>% pull()
-
-int_ids=intersect(q_ids,eq_ids)
-
-df_earthquake %>% filter(id %in%int_ids ) %>% 
-  select(id,nst,magnitudeseismicstations,rootmeansquare,rms)
-
-# earth_quakes_final %>% filter(id %in%int_ids ) %>% 
-#   select(id,magnitudeseismicstations)
 
 
 
@@ -295,7 +313,65 @@ df_earthquake %>% filter(id %in%int_ids ) %>%
 
 # Temporal Data Analysis
 
+```{r,eq_per_dt}
+
+p1=df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>% 
+  mutate(year_=year(dt_date_time)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
+  arrange(year_) %>% 
+   mutate(running_avg = rollmean(nr_eq, k =3, fill = NA, align = "right")) %>% 
+  ggplot(aes(x=year_,y=nr_eq))+
+  geom_col(stat = 'identity')+
+  geom_line(aes(y =running_avg ), color = "blue")+
+  geom_point(aes(y =running_avg ), color = "blue")+
+  labs(title = "Number of Earthquakes per year",y='count',
+       x= "year") +
+  theme_minimal()
+  
+ p2=df_earthquake %>% select(id,time.x,time.y,date_final,magnitude) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
+  ggplot(aes(x=year_,y=avg_mg))+
+  geom_line()+
+  labs(title = "Yearly Average Earthquake Magnitude ",y='avg magnitude',
+       x = "year") +
+  theme_minimal()
+ 
+ 
+p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(depth)) %>% 
+  ggplot(aes(x=year_,y=avg_mg))+
+  geom_line()+
+  labs(title = "Yearly Average Earthquake Depth ",y='avg depth',
+       x = "year") +
+  theme_minimal()
+ 
+ p4=df_earthquake %>% select(id,time.x,time.y,date_final,horizontaldistance) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(horizontaldistance)) %>% 
+  ggplot(aes(x=year_,y=avg_mg))+
+  geom_line()+
+  labs(title = "Yearly Average Earthquake Horizontal Distance ",y='avg horizontal diatance',
+       x = "year") +
+  theme_minimal()
+ 
+ 
+ (p2|p3)/p1
+
+```
+
 ```{r}
+
+df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(depth)) %>% 
+  filter(avg_mg==max(avg_mg))
 
 
 
