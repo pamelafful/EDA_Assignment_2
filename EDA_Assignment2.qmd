@@ -17,6 +17,8 @@ library(dplyr)
 library(ggplot2)
 library(ggpubr)
 library(patchwork)
+library(zoo)
+library(plotly)
 ```
 
 # Data Wrangling
@@ -311,6 +313,27 @@ left_join(df_earthquake,gr_mag_3rd_quatile, by ='richter_scale') %>%
 
 ```
 
+```{r,az_rms_mg}
+# Also explore relationship etween azimuthal gap,rms and earthqake magnitudes
+library(reshape2)
+corr_data=df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations) %>% 
+  select(where(is.numeric)) %>% 
+  cor(use = "pairwise.complete.obs")
+
+
+corr_data_df=melt(corr_data)
+
+corr_data_df %>% ggplot(aes(x=Var2, y=Var1, fill=value))+
+geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                       name="Pearson\nCorrelation") +
+  geom_text(aes(label = round(value, 2)), color = "black")+
+  labs(title = "Feature Correlation Matrix",x='Feature',y='Feature')+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+  
+```
+
 # Temporal Data Analysis
 
 ```{r,eq_per_dt}
@@ -367,12 +390,84 @@ p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>%
 
 ```{r}
 
-df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>% 
-  mutate(year_=year(date_final)) %>% 
-  group_by(year_) %>% 
-  summarize(nr_eq=n_distinct(id),avg_mg=mean(depth)) %>% 
-  filter(avg_mg==max(avg_mg))
+# key questions:
+# Look into time of day, do earthquakes tend to happen at certain times in the day,
+#also is the a pattern in their magnitudes?
+# Also look into how this breaks down per earthquake time
+# Also explore relationship etween azimuthal gap,rms and earthqake magnitudes, create a distplot for this
+# How has earthquake accuracy changed over time?
+# Look into temporal correlations (spatial aswell, lookd into this at work)
+# Extract country/location information from place variable in data- see see if we can group time series by location
 
+df_earthquake %>% select(place,latitude,longitude) %>% filter(!is.na(place))
+
+names(query)
+
+query %>% select(place,latitude,longitude) %>% filter(!is.na(place))
+```
+
+```{r,hr_day}
+
+library(ggridges)
+# eq count and magnitude per time of day
+p1=df_earthquake %>% select(dt_date_time,id,magnitude) %>% 
+  mutate(hr_day=hour(dt_date_time)) %>% 
+  group_by(hr_day) %>% 
+  summarize(nr_eq=length(id),mean_mg=mean(magnitude)) %>% 
+  ggplot(aes(x=hr_day,y=nr_eq))+
+  geom_col(stat = 'identity')+
+  labs(title = "Hourly Count Earthquakes",y='count',
+       x= "hour of day") +
+  theme_minimal()
+
+p2=df_earthquake %>% select(dt_date_time,id,magnitude) %>% 
+  mutate(hr_day=hour(dt_date_time)) %>% 
+  group_by(hr_day) %>% 
+  summarize(nr_eq=length(id),mean_mg=mean(magnitude)) %>% 
+  ggplot(aes(x=hr_day,y=mean_mg))+
+  geom_line()+
+  geom_point()+
+  labs(title = "Hourly Average Earthquake Magnitude",y='average magnitude',
+       x= "hour of day") +
+  theme_minimal()
+
+
+
+p3=df_earthquake %>% select(dt_date_time,id,magnitude,richter_scale) %>%
+  mutate(hr_day=hour(dt_date_time)) %>%
+  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  group_by(hr_day,richter_scale) %>%
+  summarize(nr_eq=length(id),mean_mg=mean(magnitude)) %>%
+  
+  ggplot(aes(x=hr_day,y=nr_eq,fill=richter_scale))+
+  geom_ridgeline(aes(height=nr_eq))+
+  
+  labs(title = "Hourly Count Earthquakes-Grouped by Category",y='count',
+       x= "hour of day") +
+  theme_minimal()
+
+
+(p2+p1)
+  
+p3
+```
+
+Key find:
+
+```{r,temp_corr}
+
+# correlation between rms and magnitude - over time
+# df_earthquake %>% 
+#   mutate(year_=year(dt_date_time)) %>% 
+#   group_by(year_) %>% 
+#   summarise(avg_rms=mean(rms,rm.na=TRUE)) %>% 
+#   ggplot(aes(x=year_,y=avg_rms))+
+#   geom_line()+
+#   labs(title = "Accuracy over time",y='root mean sqaured error',
+#        x= "year") +
+#   theme_minimal()
+
+#df_earthquake %>% select(place,latitude,longitude) %>% filter(!is.na(place))
 
 
 ```
