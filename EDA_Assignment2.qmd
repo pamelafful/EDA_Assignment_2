@@ -92,8 +92,10 @@ colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 
 # lower the case of the ID values
 earth_quakes_final$id=tolower(earth_quakes_final$id)
+earth_quakes_final$type=tolower(earth_quakes_final$type)
 
-
+names(earth_quakes_final)
+names(query)
 ```
 
 Finally join the dataframes on common column values
@@ -108,11 +110,72 @@ query_cols=names(query)
 join_cols=intersect(eq_cols,query_cols)
 join_cols=join_cols[join_cols!='time']
 
-df_=left_join(earth_quakes_final,query, by=join_cols)
+ex_cols=c('date_final','id','type')
+
+# rename common cols in the query dataframe to get rid of duplicated column names once the two dataframes are joined
+for(col in join_cols){
+  if(col %in% ex_cols){
+  names(query)[names(query) == col] = col}
+  else{
+    names(query)[names(query) == col] = paste0(col,'_query')
+  }
+    
+    
+}
+
+df_=full_join(earth_quakes_final,query, by=ex_cols )
 
 # filter for earthqauke data
 
-df_earthquake=dplyr::filter(df_, `type` =='Earthquake')
+df_earthquake=dplyr::filter(df_, `type` =='earthquake')
+
+# Fill in na for some columns
+
+
+df_earthquake=df_earthquake %>% mutate(magnitude=case_when(is.na(magnitude) & !is.na(mag)~ mag,
+                                             TRUE ~magnitude
+                                             )) %>% mutate(rootmeansquare=case_when(is.na(rootmeansquare) & !is.na(rms)~ rms,
+                                             TRUE ~rootmeansquare
+                                             )) %>% 
+mutate(rootmeansquare=case_when(is.na(magnitudeerror) & !is.na(magerror)~ magerror,
+                                             TRUE ~magnitudeerror
+                                             )) %>% 
+  
+mutate(depth=case_when(is.na(depth) & !is.na(depth_query)~ depth_query,
+                                             TRUE ~depth
+                                             )) %>% 
+ 
+mutate(depth=case_when(is.na(deptherror) & !is.na(deptherror_query)~ deptherror_query,
+                                             TRUE ~deptherror
+                                             ))  %>% 
+mutate(depth=case_when(is.na(dt_date_time) & !is.na(dt_date_time_query)~ dt_date_time_query,
+                                             TRUE ~dt_date_time
+                                             ))  %>%  
+  
+mutate(depth=case_when(is.na(horizontalerror) & !is.na(horizontalerror_query)~ horizontalerror_query,
+                                             TRUE ~horizontalerror
+                                             )) %>% 
+mutate(depth=case_when(is.na(latitude) & !is.na(latitude_query)~ latitude_query,
+                                             TRUE ~latitude
+                                             )) %>% 
+mutate(depth=case_when(is.na(longitude) & !is.na(longitude_query)~ longitude_query,
+                                             TRUE ~longitude
+                                             )) %>% 
+mutate(depth=case_when(is.na(longitude) & !is.na(longitude_query)~ longitude_query,
+                                             TRUE ~longitude
+                                             )) %>% 
+  
+mutate(depth=case_when(is.na(source) & !is.na(magsource)~ magsource,
+                                             TRUE ~source
+                                             )) %>% 
+  
+mutate(depth=case_when(is.na(status) & !is.na(status_query)~ status_query,
+                                             TRUE ~status
+                                             )) 
+   
+
+
+#sort(names(df_earthquake))
 
 ```
 
@@ -327,6 +390,19 @@ geom_tile() +
   
 ```
 
+```{r}
+df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>% 
+  mutate(year_=year(dt_date_time)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
+  filter(nr_eq==max(nr_eq))
+
+df_earthquake %>% mutate(year_=year(dt_date_time)) %>% 
+select(id,time.x,time.y,dt_date_time,magnitude,year_) %>% 
+  filter(is.na(year_))
+
+```
+
 # Temporal Data Analysis
 
 ```{r eq_per_dt, eval=TRUE, echo=FALSE}
@@ -469,5 +545,26 @@ Key find:
 
 #df_earthquake %>% select(place,latitude,longitude) %>% filter(!is.na(place))
 
+
+```
+
+# Spatial Analysis
+
+-   look into first filtering for
+
+```{r}
+df_earthquake %>% select(net) %>% filter(!is.na(net))
+
+ids=query %>% filter(!is.na(net) & type_query=='earthquake') %>% distinct(id) %>% pull()
+
+df_earthquake %>% filter(type=='Earthquake' )  %>% distinct(type_query)
+```
+
+```{r}
+a=data.frame(num=1:10,val1=rep('num',times=10))
+b=data.frame(num=2:20,val2=rep('vel',times=length(2:20)))
+
+
+full_join(a,b)
 
 ```
