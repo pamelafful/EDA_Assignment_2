@@ -49,7 +49,7 @@ Create truncated date variables, only including the date part
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
 query$date_final=date(query$dt_date_time)
-
+query %>% filter(  is.null(dt_date_time))
 ```
 
 Earthquakes data
@@ -75,6 +75,8 @@ earth_quake_na$dt_date_time=earth_quake_na %>% mutate(dt_date_time=ymd_hms(Date)
 earth_quakes_final=rbind(earth_quake_na,earth_quake_non_na)
 earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
 
+
+earth_quakes_final %>% filter(  is.null(dt_date_time))
 ```
 
 Transform column names to lower case for both dataframes
@@ -95,7 +97,10 @@ earth_quakes_final$id=tolower(earth_quakes_final$id)
 earth_quakes_final$type=tolower(earth_quakes_final$type)
 
 names(earth_quakes_final)
-names(query)
+table(names(query))
+
+names(query[, !duplicated(colnames(query))])
+
 ```
 
 Finally join the dataframes on common column values
@@ -122,6 +127,8 @@ for(col in join_cols){
     
     
 }
+
+query=query[, !duplicated(colnames(query))]
 
 df_=full_join(earth_quakes_final,query, by=ex_cols )
 
@@ -175,7 +182,7 @@ mutate(depth=case_when(is.na(status) & !is.na(status_query)~ status_query,
    
 
 
-#sort(names(df_earthquake))
+
 
 ```
 
@@ -397,9 +404,11 @@ df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>%
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
   filter(nr_eq==max(nr_eq))
 
-df_earthquake %>% mutate(year_=year(dt_date_time)) %>% 
-select(id,time.x,time.y,dt_date_time,magnitude,year_) %>% 
+df_earthquake %>% mutate(year_=year(date_final)) %>%
+select(id,time.x,time.y,dt_date_time,magnitude,year_) %>%
   filter(is.na(year_))
+
+names(df_earthquake)
 
 ```
 
@@ -411,8 +420,8 @@ select(id,time.x,time.y,dt_date_time,magnitude,year_) %>%
 #| fig-height: 6
 #| fig-width: 12
 
-p1=df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>% 
-  mutate(year_=year(dt_date_time)) %>% 
+p1=df_earthquake %>% select(id,time.x,time.y,date_final,magnitude) %>% 
+  mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
   arrange(year_) %>% 
