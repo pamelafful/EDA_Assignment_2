@@ -1,4 +1,5 @@
 ---
+library---
 title: "EDA Assignmemnt2"
 author: "Pamela Afful"
 format: pdf
@@ -19,6 +20,7 @@ library(ggpubr)
 library(patchwork)
 library(zoo)
 library(plotly)
+library(spacyr)
 ```
 
 # Data Wrangling
@@ -49,7 +51,7 @@ Create truncated date variables, only including the date part
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
 query$date_final=date(query$dt_date_time)
-query %>% filter(  is.null(dt_date_time))
+query %>% filter(is.na(dt_date_time))
 ```
 
 Earthquakes data
@@ -76,7 +78,7 @@ earth_quakes_final=rbind(earth_quake_na,earth_quake_non_na)
 earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
 
 
-earth_quakes_final %>% filter(  is.null(dt_date_time))
+earth_quakes_final %>% filter(is.na(dt_date_time))
 ```
 
 Transform column names to lower case for both dataframes
@@ -96,10 +98,10 @@ colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 earth_quakes_final$id=tolower(earth_quakes_final$id)
 earth_quakes_final$type=tolower(earth_quakes_final$type)
 
-names(earth_quakes_final)
-table(names(query))
+#names(earth_quakes_final)
+#table(names(query))
 
-names(query[, !duplicated(colnames(query))])
+#names(query[, !duplicated(colnames(query))])
 
 ```
 
@@ -152,36 +154,36 @@ mutate(depth=case_when(is.na(depth) & !is.na(depth_query)~ depth_query,
                                              TRUE ~depth
                                              )) %>% 
  
-mutate(depth=case_when(is.na(deptherror) & !is.na(deptherror_query)~ deptherror_query,
+mutate(deptherror=case_when(is.na(deptherror) & !is.na(deptherror_query)~ deptherror_query,
                                              TRUE ~deptherror
                                              ))  %>% 
-mutate(depth=case_when(is.na(dt_date_time) & !is.na(dt_date_time_query)~ dt_date_time_query,
+mutate(dt_date_time=case_when(is.na(dt_date_time) & !is.na(dt_date_time_query)~ dt_date_time_query,
                                              TRUE ~dt_date_time
                                              ))  %>%  
   
-mutate(depth=case_when(is.na(horizontalerror) & !is.na(horizontalerror_query)~ horizontalerror_query,
+mutate(horizontalerror=case_when(is.na(horizontalerror) & !is.na(horizontalerror_query)~ horizontalerror_query,
                                              TRUE ~horizontalerror
                                              )) %>% 
-mutate(depth=case_when(is.na(latitude) & !is.na(latitude_query)~ latitude_query,
+mutate(latitude=case_when(is.na(latitude) & !is.na(latitude_query)~ latitude_query,
                                              TRUE ~latitude
                                              )) %>% 
-mutate(depth=case_when(is.na(longitude) & !is.na(longitude_query)~ longitude_query,
-                                             TRUE ~longitude
-                                             )) %>% 
-mutate(depth=case_when(is.na(longitude) & !is.na(longitude_query)~ longitude_query,
+mutate(longitude=case_when(is.na(longitude) & !is.na(longitude_query)~ longitude_query,
                                              TRUE ~longitude
                                              )) %>% 
   
-mutate(depth=case_when(is.na(source) & !is.na(magsource)~ magsource,
+mutate(source=case_when(is.na(source) & !is.na(magsource)~ magsource,
                                              TRUE ~source
                                              )) %>% 
   
-mutate(depth=case_when(is.na(status) & !is.na(status_query)~ status_query,
+mutate(status=case_when(is.na(status) & !is.na(status_query)~ status_query,
                                              TRUE ~status
                                              )) 
    
 
 
+df_earthquake %>% filter(is.na(dt_date_time)) %>% distinct(id)
+
+df_earthquake %>% filter(id=='us7000jkwd') %>% select(id,dt_date_time,dt_date_time_query) 
 
 
 ```
@@ -404,11 +406,13 @@ df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>%
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
   filter(nr_eq==max(nr_eq))
 
-df_earthquake %>% mutate(year_=year(date_final)) %>%
+df_earthquake %>% mutate(year_=year(dt_date_time)) %>%
 select(id,time.x,time.y,dt_date_time,magnitude,year_) %>%
   filter(is.na(year_))
 
-names(df_earthquake)
+df_earthquake %>% filter(is.na(year(dt_date_time))) %>% 
+  select(dt_date_time)
+
 
 ```
 
@@ -492,8 +496,8 @@ p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>%
 
 #| message: false
 #| warning: false
-#| fig-height: 6
-#| fig-width: 13
+
+
 
 library(ggridges)
 # eq count and magnitude per time of day
@@ -562,18 +566,14 @@ Key find:
 -   look into first filtering for
 
 ```{r}
-df_earthquake %>% select(net) %>% filter(!is.na(net))
+df_earthquake %>% select(id,net,place,latitude,longitude) %>% filter( !is.na(net))
+  
 
-ids=query %>% filter(!is.na(net) & type_query=='earthquake') %>% distinct(id) %>% pull()
-
-df_earthquake %>% filter(type=='Earthquake' )  %>% distinct(type_query)
 ```
 
 ```{r}
-a=data.frame(num=1:10,val1=rep('num',times=10))
-b=data.frame(num=2:20,val2=rep('vel',times=length(2:20)))
 
-
-full_join(a,b)
+df_earthquake%>% filter(type=='earthquake') %>% 
+  distinct(net,place)
 
 ```
