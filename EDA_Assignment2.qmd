@@ -1,5 +1,4 @@
 ---
-library---
 title: "EDA Assignmemnt2"
 author: "Pamela Afful"
 format: pdf
@@ -36,6 +35,7 @@ library(tidyr)
 library(countries)
 library(rnaturalearth)
 library(rnaturalearthdata)
+library(leaflet)
 ```
 
 # Data Wrangling
@@ -415,18 +415,18 @@ geom_tile() +
 ```
 
 ```{r}
-df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>% 
-  mutate(year_=year(dt_date_time)) %>% 
-  group_by(year_) %>% 
-  summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
-  filter(nr_eq==max(nr_eq))
-
-df_earthquake %>% mutate(year_=year(dt_date_time)) %>%
-select(id,time.x,time.y,dt_date_time,magnitude,year_) %>%
-  filter(is.na(year_))
-
-df_earthquake %>% filter(is.na(year(dt_date_time))) %>% 
-  select(dt_date_time)
+# df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>% 
+#   mutate(year_=year(dt_date_time)) %>% 
+#   group_by(year_) %>% 
+#   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
+#   filter(nr_eq==max(nr_eq))
+# 
+# df_earthquake %>% mutate(year_=year(dt_date_time)) %>%
+# select(id,time.x,time.y,dt_date_time,magnitude,year_) %>%
+#   filter(is.na(year_))
+# 
+# df_earthquake %>% filter(is.na(year(dt_date_time))) %>% 
+#   select(dt_date_time)
 
 
 ```
@@ -511,6 +511,8 @@ p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>%
 
 #| message: false
 #| warning: false
+#| fig-height: 6
+#| fig-width: 12
 
 
 
@@ -558,7 +560,7 @@ p3=df_earthquake %>% select(dt_date_time,id,magnitude,richter_scale) %>%
 
 Key find:
 
-```{r,temp_corr}
+```{r,temp_corr,eval=TRUE, echo=FALSE}
 
 # correlation between rms and magnitude - over time
 # df_earthquake %>% 
@@ -578,22 +580,29 @@ Key find:
 
 # Spatial Analysis
 
--   look into first filtering for
-
-```{r,loc_ext}
+```{r,loc_ext,eval=TRUE, echo=FALSE}
 
 # extract locations from "place" column
 
 eq_places=df_earthquake %>% filter(!is.na(place)) %>% select(id,place) %>% mutate(doc_id=paste0('text',row_number())) %>% select(id,place,doc_id)
 
-location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
+
+# location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
+
+
+
+#write.csv(location_entities, "location_entities.csv", row.names = FALSE)
+
+# Load the extracted Entities
+
+location_entities=read.csv("location_entities.csv")
 
 
 tagged_locations=left_join(eq_places,location_entities, by='doc_id') %>% rename(location=text)
 
 
 # join back to df_earthquake
-df_earthquake_=left_join(df_earthquake,tagged_locations,by=c('id','place')) 
+df_earthquake_=left_join(df_earthquake,tagged_locations,by=c('id','place'))
 
 
 
@@ -601,16 +610,100 @@ df_earthquake_=left_join(df_earthquake,tagged_locations,by=c('id','place'))
 
 ```
 
-```{r,sdf}
+```{r,sdf,eval=TRUE, echo=FALSE}
 
 sdf_earthquake=st_as_sf(df_earthquake_,coords=c('longitude','latitude'),crs=4326)
-names(sdf_earthquake)
+
+
 ```
 
-```{r,countries_plot}
+```{r,countries_plot,eval=TRUE, echo=FALSE}
 
 # plot earthquake freq by location
 # Since there are some eq ids that have two locations tagged to them, use the first location tagged to them?
+# Qs: Top countries by earthqake count-fill by avg magnitude
+# Countries and ricter_scale- which countries experiace which eq type most commonly
+
+
+#| message: false
+#| warning: false
+#| fig-height: 8
+#| fig-width: 12
+
+all_countries <- list_countries() 
+
+#world=ne_countries(scale='medium',returnclass='sf')
+
+#sdf_earthquake_countries=st_join(sdf_earthquake,world['name'])
+
+
+
+p1=sdf_earthquake %>% mutate(country=case_when(
+  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
+  distinct(id,country,magnitude,location) %>%
+   group_by(location) %>%
+  summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
+  arrange(desc(eq_count)) %>%
+  head(20) %>%
+  ggplot(aes(x=reorder(location,-eq_count),y=eq_count,fill=avg_magnitude))+
+  geom_col(stat = 'identity')+
+  labs(title = "Top 20 Locations By Earthquke Count ",y='Count',
+       x= "Country") +
+  scale_fill_gradient(low = "yellow", high = "red")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+
+p2=sdf_earthquake %>% mutate(country=case_when(
+  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
+  distinct(id,country,magnitude) %>%
+   group_by(country) %>%
+  summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
+  arrange(desc(eq_count)) %>%
+  head(20) %>%
+  ggplot(aes(x=reorder(country,-eq_count),y=eq_count,fill=avg_magnitude))+
+  geom_col(stat = 'identity')+
+  labs(title = "Top 20 Countries By Earthquke Count ",y='Count',
+       x= "Country") +
+  scale_fill_gradient(low = "yellow", high = "red")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+
+
+p3=sdf_earthquake %>% mutate(country=case_when(
+  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
+  distinct(id,country,magnitude,richter_scale) %>%
+  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+   group_by(country,richter_scale) %>%
+  summarize(eq_count=n_distinct(id)) %>%
+  group_by(country,richter_scale) %>%
+  arrange(desc(eq_count)) %>%
+  group_by(richter_scale) %>%
+  slice_head(n = 5) %>%
+  ggplot(aes(x=reorder(country,-eq_count),y=eq_count))+
+  geom_col(stat = 'identity')+
+  labs(title = "Top 5 Countries Per Earthquake Ocurrances Facetted by Scale ",y='Count',
+       x= "Country") +
+  facet_wrap(~richter_scale,scales = "free")+
+  #scale_fill_gradient(low = "yellow", high = "red")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+
+
+p2
+p3
+
+
+```
+
+```{r,eq_map,eval=TRUE,echo=FALSE}
+
+#| message: false
+#| warning: false
+#| fig-height: 8
+#| fig-width: 12
+
+# Since indonesia contains /has the highest occurances of Eq, I'll focus on corrvariables in that reghion (comeback!)
+
 
 all_countries <- list_countries() 
 
@@ -618,24 +711,49 @@ world=ne_countries(scale='medium',returnclass='sf')
 
 sdf_earthquake_countries=st_join(sdf_earthquake,world['name'])
 
-View(sdf_earthquake_countries %>% select(id,place,location,name) %>% filter(is.na(name) ))
 
-sdf_earthquake %>% mutate(country=case_when(
-  location %in% all_countries ~location)) %>%
-  distinct(id,country) %>% 
-   group_by(country) %>% 
-  
-  summarize(eq_count=n_distinct(id)) %>% 
-  arrange(desc(eq_count)) %>% 
-  filter( country) %>% slice(n=20)
-  ggplot(aes(x=country,y=eq_count))+
-  geom_col(stat = 'identity')+
-  labs(title = "Top 20 Countries By Earthquke Count ",y='Count',
-       x= "Country") +
-  theme_minimal()
-  
+all_countries <- list_countries() 
 
+
+col_pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain = sdf_earthquake$magnitude
+)
+
+id_df=sdf_earthquake %>% 
+  mutate(country=case_when(
+  location %in% all_countries ~location)) %>% 
+  filter( !is.na(country)) %>% 
+  distinct(id,country,magnitude,location,richter_scale,geometry)
+
+
+
+leaflet(id_df) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    radius =~magnitude ,  
+    color = ~col_pal(magnitude),
+    fillOpacity = 0.6,
+    label = ~country
+  ) %>% 
+    addLegend(
+    pal = col_pal, 
+    values = ~magnitude, 
+    position = "bottomright", 
+    title = "Magnitude"
+    
+  )
 
 ```
 
-1
+```{r,stat_map,eval=FALSE}
+
+mag_groups<- sdf_earthquake %>% 
+  mutate(country=case_when(
+  location %in% all_countries ~location)) %>% 
+  group_by(country) %>%
+  summarize(mean_mag = mean(magnitude),
+            geometry = st_union(geometry))
+
+plot(mag_groups["mean_mag"])
+```
