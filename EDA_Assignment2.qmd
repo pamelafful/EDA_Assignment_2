@@ -13,6 +13,14 @@ execute:
 ---
 
 ```{r, read_lib, include=FALSE}
+
+# install.packages('spacyr')
+#spacy_install()
+# install.packages('stringr')
+#install.packages('countries')
+#install.packages("rnaturalearthdata")
+
+
 library(lubridate)
 library(dplyr)
 library(ggplot2)
@@ -21,6 +29,13 @@ library(patchwork)
 library(zoo)
 library(plotly)
 library(spacyr)
+library(sf)
+spacy_initialize(model = "en_core_web_sm")
+library(stringr)
+library(tidyr)
+library(countries)
+library(rnaturalearth)
+library(rnaturalearthdata)
 ```
 
 # Data Wrangling
@@ -565,15 +580,62 @@ Key find:
 
 -   look into first filtering for
 
-```{r}
-df_earthquake %>% select(id,net,place,latitude,longitude) %>% filter( !is.na(net))
+```{r,loc_ext}
+
+# extract locations from "place" column
+
+eq_places=df_earthquake %>% filter(!is.na(place)) %>% select(id,place) %>% mutate(doc_id=paste0('text',row_number())) %>% select(id,place,doc_id)
+
+location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
+
+
+tagged_locations=left_join(eq_places,location_entities, by='doc_id') %>% rename(location=text)
+
+
+# join back to df_earthquake
+df_earthquake_=left_join(df_earthquake,tagged_locations,by=c('id','place')) 
+
+
+
+
+
+```
+
+```{r,sdf}
+
+sdf_earthquake=st_as_sf(df_earthquake_,coords=c('longitude','latitude'),crs=4326)
+names(sdf_earthquake)
+```
+
+```{r,countries_plot}
+
+# plot earthquake freq by location
+# Since there are some eq ids that have two locations tagged to them, use the first location tagged to them?
+
+all_countries <- list_countries() 
+
+world=ne_countries(scale='medium',returnclass='sf')
+
+sdf_earthquake_countries=st_join(sdf_earthquake,world['name'])
+
+View(sdf_earthquake_countries %>% select(id,place,location,name) %>% filter(is.na(name) ))
+
+sdf_earthquake %>% mutate(country=case_when(
+  location %in% all_countries ~location)) %>%
+  distinct(id,country) %>% 
+   group_by(country) %>% 
+  
+  summarize(eq_count=n_distinct(id)) %>% 
+  arrange(desc(eq_count)) %>% 
+  filter( country) %>% slice(n=20)
+  ggplot(aes(x=country,y=eq_count))+
+  geom_col(stat = 'identity')+
+  labs(title = "Top 20 Countries By Earthquke Count ",y='Count',
+       x= "Country") +
+  theme_minimal()
   
 
-```
-
-```{r}
-
-df_earthquake%>% filter(type=='earthquake') %>% 
-  distinct(net,place)
 
 ```
+
+1
