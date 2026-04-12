@@ -9,6 +9,8 @@ execute:
   warning: false
   message: false
   echo: false
+  
+bibliography: references.bib
 ---
 
 ```{r, read_lib, include=FALSE}
@@ -18,6 +20,9 @@ execute:
 # install.packages('stringr')
 #install.packages('countries')
 #install.packages("rnaturalearthdata")
+#install.packages('skimr')
+# install.packages("webshot2")
+# install.packages("htmlwidgets")
 
 
 library(lubridate)
@@ -36,11 +41,29 @@ library(countries)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(leaflet)
+library(knitr)
+library(skimr)
+library(webshot2)
+library(htmlwidgets)
 ```
 
-# Data Wrangling
+# Data Wrangling Steps
 
-Read in the files
+1.  Convert date columns into for both earthqake and query dataframes: a date_tine column and date column
+
+2.  Lower the case in all the column names in the earthquake dataframe and remove the period,".", character in the column names
+
+3.  Lower the case of the of the values in the **id** and **type** column in the earthquake dataframe, for easy joining
+
+4.  Find column names that are common in both the earthquake and query dataframes, and rename some column names originating from the query dataframe to avoid duplicated column names before joining \*word this better
+
+5.  Join the two dataframes using the id,date, and type columns: df
+
+6.  Filter for type='earthquake' in the df dataframe, which gives the final df_earthquake dataframe from which the analysis is performed on.
+
+7.  Replace in NA values of the common columns with values from the corresponding column in the columns from the query dataframe \*word this better again.
+
+8.  Create richter_scale column using the category definition from here [@usgs_magnitude]
 
 ```{r,read_data,echo=FALSE,eval=TRUE}
 
@@ -50,7 +73,7 @@ earth_quakes=read.csv("Earthquakes_1965_2016.csv")
 
 ```
 
-Check Dataset Dimensions
+Data Dimensions
 
 ```{r,data_det,echo=FALSE,eval=TRUE}
 # check query df details
@@ -67,6 +90,8 @@ Create truncated date variables, only including the date part
 query$dt_date_time=ymd_hms(query$time)
 query$date_final=date(query$dt_date_time)
 query %>% filter(is.na(dt_date_time))
+
+
 ```
 
 Earthquakes data
@@ -77,10 +102,10 @@ Earthquakes data
 #| fig-height: 6
 #| fig-width: 6
 #| paged-print: true
+
+
 # Split data into 2 then put back together
 
-# earth_quakes_final=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time)))
-# earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
 
 
 earth_quakes$dt_date_time=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time))) %>% pull(dt_date_time)
@@ -93,12 +118,8 @@ earth_quakes_final=rbind(earth_quake_na,earth_quake_non_na)
 earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
 
 
-earth_quakes_final %>% filter(is.na(dt_date_time))
+
 ```
-
-Transform column names to lower case for both dataframes
-
-Also, remove the dot character, "." from the column names of the earthquake data and lower the case of the values in the id column for the earthquakes data
 
 ```{r,lower_col,echo=FALSE,eval=TRUE}
 # lower the case of column names
@@ -113,14 +134,9 @@ colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 earth_quakes_final$id=tolower(earth_quakes_final$id)
 earth_quakes_final$type=tolower(earth_quakes_final$type)
 
-#names(earth_quakes_final)
-#table(names(query))
 
-#names(query[, !duplicated(colnames(query))])
 
 ```
-
-Finally join the dataframes on common column values
 
 ```{r,df_join,echo=FALSE,eval=TRUE}
 
@@ -147,11 +163,11 @@ for(col in join_cols){
 
 query=query[, !duplicated(colnames(query))]
 
-df_=full_join(earth_quakes_final,query, by=ex_cols )
+df=full_join(earth_quakes_final,query, by=ex_cols )
 
 # filter for earthqauke data
 
-df_earthquake=dplyr::filter(df_, `type` =='earthquake')
+df_earthquake=dplyr::filter(df, `type` =='earthquake')
 
 # Fill in na for some columns
 
@@ -196,14 +212,12 @@ mutate(status=case_when(is.na(status) & !is.na(status_query)~ status_query,
    
 
 
-df_earthquake %>% filter(is.na(dt_date_time)) %>% distinct(id)
 
-df_earthquake %>% filter(id=='us7000jkwd') %>% select(id,dt_date_time,dt_date_time_query) 
+
+#df_earthquake %>% filter(!is.na(place)) %>% head() %>% select(place)
 
 
 ```
-
-### Creating Magnitude Scale
 
 ```{r,mag_cat,echo=FALSE,eval=TRUE}
 df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
@@ -233,15 +247,32 @@ df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
 )
                          ) %>% pull(richter_scale)
 
+#df_earthquake %>% filter(!is.na(place)) %>% head() %>% select(place)
+
+```
+
+```{r, drop_cols,eval=TRUE,echo=FALSE}
+
+all_cols=names(df_earthquake)
+keep_cols=all_cols[!all_cols %in% c("time.x","dt_date_time_query","date","time.y")]
+
+df_earthquake=df_earthquake %>% select(all_of(keep_cols))
 ```
 
 # General Data Analysis
 
 Find count/frequency of earth quake types per magnitude
 
+```{r,df_attr,eval=TRUE,echo=FALSE}
+
+# comeback and find a tidyier way of showing this
+#skim(df_earthquake)
+```
+
 ```{r,mg_summ}
 # Magnitude summary Statistics
 summary(df_earthquake$magnitude)
+
 ```
 
 ```{r,bar_plot,echo=FALSE,eval=TRUE}
@@ -267,11 +298,14 @@ p2=df_earthquake %>%
   select(magnitude,richter_scale) %>% 
   ggplot(aes(y=magnitude))+
   geom_boxplot()+
+  coord_flip()+
   labs(title = "Distribution of Earthquake Magnitudes",
        y = "magnitude") +
   theme_minimal()
 
-p1+p2
+p1/p2
+
+
   
 ```
 
@@ -300,6 +334,8 @@ p2=df_earthquake %>% filter(!is.na(depth)) %>%
   theme_minimal()
 
 p1/p2
+
+
 
 ```
 
@@ -357,6 +393,8 @@ p4=df_earthquake %>%
 
 (p1+p2)/(p3+p4)
 
+
+
 ```
 
 ```{r}
@@ -411,6 +449,8 @@ geom_tile() +
   geom_text(aes(label = round(value, 2)), color = "black")+
   labs(title = "Feature Correlation Matrix",x='Feature',y='Feature')+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+
+
   
 ```
 
@@ -439,7 +479,7 @@ geom_tile() +
 #| fig-height: 6
 #| fig-width: 12
 
-p1=df_earthquake %>% select(id,time.x,time.y,date_final,magnitude) %>% 
+p1=df_earthquake %>% select(id,date_final,magnitude) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
@@ -453,7 +493,7 @@ p1=df_earthquake %>% select(id,time.x,time.y,date_final,magnitude) %>%
        x= "year") +
   theme_minimal()
   
- p2=df_earthquake %>% select(id,time.x,time.y,date_final,magnitude) %>% 
+ p2=df_earthquake %>% select(id,date_final,magnitude) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
@@ -464,7 +504,7 @@ p1=df_earthquake %>% select(id,time.x,time.y,date_final,magnitude) %>%
   theme_minimal()
  
  
-p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>% 
+p3=df_earthquake %>% select(id,date_final,depth) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
   summarize(nr_eq=n_distinct(id),avg_mg=mean(depth)) %>% 
@@ -474,7 +514,7 @@ p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>%
        x = "year") +
   theme_minimal()
  
- p4=df_earthquake %>% select(id,time.x,time.y,date_final,horizontaldistance) %>% 
+ p4=df_earthquake %>% select(id,date_final,horizontaldistance) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
   summarize(nr_eq=n_distinct(id),avg_mg=mean(horizontaldistance)) %>% 
@@ -486,6 +526,8 @@ p3=df_earthquake %>% select(id,time.x,time.y,date_final,depth) %>%
  
  
  (p2|p3)/p1
+ 
+
 
 ```
 
@@ -555,10 +597,10 @@ p3=df_earthquake %>% select(dt_date_time,id,magnitude,richter_scale) %>%
   theme_minimal()
 
 
-(p2|p1)/p3
-```
+p1/p2/p3
 
-Key find:
+
+```
 
 ```{r,temp_corr,eval=TRUE, echo=FALSE}
 
@@ -576,48 +618,51 @@ Key find:
 #df_earthquake %>% select(place,latitude,longitude) %>% filter(!is.na(place))
 
 
+
+
 ```
 
 # Spatial Analysis
 
-```{r,loc_ext,eval=TRUE, echo=FALSE}
+```{r,loc_ext_spcy,eval=F, echo=FALSE}
+
+location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
+
+write.csv(location_entities, "location_entities.csv", row.names = FALSE)
+
+```
+
+```{r,loc_ext,eval=T, echo=FALSE}
 
 # extract locations from "place" column
 
-eq_places=df_earthquake %>% filter(!is.na(place)) %>% select(id,place) %>% mutate(doc_id=paste0('text',row_number())) %>% select(id,place,doc_id)
+eq_places=df_earthquake %>% filter(!is.na(place)) %>% select(id,place)  %>% mutate(doc_id=paste0('text',row_number())) %>% select(id,place,doc_id)
 
-
-# location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
-
-
-
-#write.csv(location_entities, "location_entities.csv", row.names = FALSE)
 
 # Load the extracted Entities
 
 location_entities=read.csv("location_entities.csv")
 
 
+
 tagged_locations=left_join(eq_places,location_entities, by='doc_id') %>% rename(location=text)
 
 
-# join back to df_earthquake
+#join back to df_earthquake
 df_earthquake_=left_join(df_earthquake,tagged_locations,by=c('id','place'))
 
 
 
 
-
 ```
 
-```{r,sdf,eval=TRUE, echo=FALSE}
+```{r,sdf,eval=T, echo=FALSE}
 
 sdf_earthquake=st_as_sf(df_earthquake_,coords=c('longitude','latitude'),crs=4326)
 
-
 ```
 
-```{r,countries_plot,eval=TRUE, echo=FALSE}
+```{r,countries_plot,eval=T, echo=FALSE}
 
 # plot earthquake freq by location
 # Since there are some eq ids that have two locations tagged to them, use the first location tagged to them?
@@ -632,27 +677,24 @@ sdf_earthquake=st_as_sf(df_earthquake_,coords=c('longitude','latitude'),crs=4326
 
 all_countries <- list_countries() 
 
-#world=ne_countries(scale='medium',returnclass='sf')
-
-#sdf_earthquake_countries=st_join(sdf_earthquake,world['name'])
 
 
 
-p1=sdf_earthquake %>% mutate(country=case_when(
-  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
-  distinct(id,country,magnitude,location) %>%
-   group_by(location) %>%
-  summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
-  arrange(desc(eq_count)) %>%
-  head(20) %>%
-  ggplot(aes(x=reorder(location,-eq_count),y=eq_count,fill=avg_magnitude))+
-  geom_col(stat = 'identity')+
-  labs(title = "Top 20 Locations By Earthquke Count ",y='Count',
-       x= "Country") +
-  scale_fill_gradient(low = "yellow", high = "red")+
-  theme_minimal()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
-
+# p1=sdf_earthquake %>% mutate(country=case_when(
+#   location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
+#   distinct(id,country,magnitude,location) %>%
+#    group_by(location) %>%
+#   summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
+#   arrange(desc(eq_count)) %>%
+#   head(20) %>%
+#   ggplot(aes(x=reorder(location,-eq_count),y=eq_count,fill=avg_magnitude))+
+#   geom_col(stat = 'identity')+
+#   labs(title = "Top 20 Locations By Earthquke Count ",y='Count',
+#        x= "Country") +
+#   scale_fill_gradient(low = "yellow", high = "red")+
+#   theme_minimal()+
+#   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+# 
 p2=sdf_earthquake %>% mutate(country=case_when(
   location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
   distinct(id,country,magnitude) %>%
@@ -668,7 +710,7 @@ p2=sdf_earthquake %>% mutate(country=case_when(
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
 
-
+# 
 p3=sdf_earthquake %>% mutate(country=case_when(
   location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
   distinct(id,country,magnitude,richter_scale) %>%
@@ -688,14 +730,13 @@ p3=sdf_earthquake %>% mutate(country=case_when(
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
 
-
 p2
 p3
 
 
 ```
 
-```{r,eq_map,eval=TRUE,echo=FALSE}
+```{r,eq_map,eval=T,echo=FALSE}
 
 #| message: false
 #| warning: false
@@ -728,25 +769,36 @@ id_df=sdf_earthquake %>%
 
 
 
-leaflet(id_df) %>%
+mp=leaflet(id_df) %>%
   addTiles() %>%
   addCircleMarkers(
-    radius =~magnitude ,  
-    color = ~col_pal(magnitude),
-    fillOpacity = 0.6,
+    radius = ~magnitude,   
+    color = "purple",       
+    weight = 1,             
+    opacity = 1,               
+    fillColor = ~col_pal(magnitude), 
+    fillOpacity = 0.8,         
+    stroke = TRUE,
     label = ~country
-  ) %>% 
-    addLegend(
+  ) %>%
+  addLegend(
     pal = col_pal, 
     values = ~magnitude, 
     position = "bottomright", 
     title = "Magnitude"
-    
   )
 
+
+saveWidget(mp, "eq_map.html", selfcontained = TRUE)
+
+
+
+webshot("eq_map.html", file = "eq_map.png", vwidth = 1000, vheight = 800,delay = 2)
+
+knitr::include_graphics("eq_map.png")
 ```
 
-```{r,stat_map,eval=FALSE}
+```{r,stat_map,eval=T,echo=FALSE}
 
 mag_groups<- sdf_earthquake %>% 
   mutate(country=case_when(
