@@ -45,6 +45,7 @@ library(knitr)
 library(skimr)
 library(webshot2)
 library(htmlwidgets)
+library(terra)
 ```
 
 # Data Wrangling Steps
@@ -625,6 +626,9 @@ p1/p2/p3
 # Spatial Analysis
 
 ```{r,loc_ext_spcy,eval=F, echo=FALSE}
+# Extract eq locations from the place column using spacy
+# Store results in a csv
+# This code block takes a while
 
 location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
 
@@ -658,7 +662,26 @@ df_earthquake_=left_join(df_earthquake,tagged_locations,by=c('id','place'))
 
 ```{r,sdf,eval=T, echo=FALSE}
 
+# Attempt to extract more location/country data from in-built spatial data set
+# perform a spatial join on between world_countries dataframe and sdf_earthquake
+# Using a st_is_within_distnace predicate to attempt to tag ids that are with 100KM to the nearest country
 sdf_earthquake=st_as_sf(df_earthquake_,coords=c('longitude','latitude'),crs=4326)
+
+world_countries <- ne_countries(scale = "medium", returnclass = "sf")
+
+wc=world_countries %>% select(name,geometry) %>% rename(country_=name)
+  #reproject to meters
+
+
+
+sdf_earthquake=st_join(st_transform(sdf_earthquake, 3857),st_transform(wc, 3857),join=st_is_within_distance,dist=50000*2,left=T)%>% 
+  mutate(country_fill=coalesce(country_,location)) %>% 
+  mutate(location_fill=coalesce(location,country_)) %>% 
+  mutate(country_final= coalesce(country_fill,location_fill)) %>% 
+  mutate(country_final=coalesce(country_final,'Unknown')) 
+  
+  
+sdf_earthquake=st_transform(sdf_earthquake, crs=4326)
 
 ```
 
@@ -788,24 +811,86 @@ mp=leaflet(id_df) %>%
     title = "Magnitude"
   )
 
+mp
 
-saveWidget(mp, "eq_map.html", selfcontained = TRUE)
+#saveWidget(mp, "eq_map.html", selfcontained = TRUE)
 
 
 
-webshot("eq_map.html", file = "eq_map.png", vwidth = 1000, vheight = 800,delay = 2)
+#webshot("eq_map.html", file = "eq_map.png", vwidth = 1000, vheight = 800,delay = 2)
 
-knitr::include_graphics("eq_map.png")
+#knitr::include_graphics("eq_map.png")
 ```
 
 ```{r,stat_map,eval=T,echo=FALSE}
 
-mag_groups<- sdf_earthquake %>% 
-  mutate(country=case_when(
-  location %in% all_countries ~location)) %>% 
-  group_by(country) %>%
-  summarize(mean_mag = mean(magnitude),
-            geometry = st_union(geometry))
+# mag_groups<- sdf_earthquake %>% 
+#   mutate(country=case_when(
+#   location %in% all_countries ~location)) %>% 
+#   group_by(country) %>%
+#   summarize(mean_mag = mean(magnitude),
+#             geometry = st_union(geometry))
 
-plot(mag_groups["mean_mag"])
+
+
+vect_grid=vect(sdf_earthquake["magnitude"])
+
+r = rast(
+  ext(vect_grid),
+  resolution = 0.9
+)
+
+raster_result = rasterize(
+  vect_grid,
+  r,
+  field = "magnitude",   # your value column
+  fun = mean             # what to do if multiple points fall in one cell
+)
+
+plot(raster_result)
+
+# look into contour plots for eq magnitude, deoth and horzontal distance and other vars!!!!!
+```
+
+```{r}
+# map id with # na values in the place feature with inbuit dataset
+world_countries <- ne_countries(scale = "medium", returnclass = "sf")
+
+wc=world_countries %>% select(name,geometry) %>% rename(country_=name)
+na_country=st_join(sdf_earthquake,wc,join=st_intersects,left=T) %>% 
+  filter(is.na(country_)) %>% distinct(place,location)
+
+st_join(sdf_earthquake,wc,join=st_intersects,left=T) %>% 
+  mutate(country_fill=coalesce(country_,location)) %>% 
+  mutate(location_fill=coalesce(location,country_)) %>% 
+  mutate(country_final= coalesce(country_fill,location_fill)) %>% 
+  mutate(country_final=coalesce(country_final,'Unknown'))
+  select(id,place,country_,location,country_,country_final) %>% 
+  
+
+
+mp=leaflet(na_country) %>%
+  addTiles() %>%
+  addCircleMarkers(
+    radius = ~magnitude,   
+    color = "purple",       
+    weight = 1,             
+    opacity = 1,               
+    fillColor = ~col_pal(magnitude), 
+    fillOpacity = 0.8,         
+    stroke = TRUE
+    #label = ~country
+  ) %>%
+  addLegend(
+    pal = col_pal, 
+    values = ~magnitude, 
+    position = "bottomright", 
+    title = "Magnitude"
+  )
+mp
+```
+
+```{r}
+oceans<- ne_download(scale = "medium", type = "ocean", category = "physical",returnclass = "sf")
+oceans
 ```
