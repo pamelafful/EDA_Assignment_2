@@ -1,14 +1,19 @@
 ---
-title: "EDA Assignmemnt2"
+title: "EDA Assignmemnt 2"
 author: "Pamela Afful"
-format: pdf
+format: 
+  pdf:
+    fig-pos: 'H'
 editor: visual
 
 execute: 
-  cache: true
+  cache: false
   warning: false
   message: false
   echo: false
+  
+
+
   
 bibliography: references.bib
 ---
@@ -24,7 +29,7 @@ bibliography: references.bib
 # install.packages("webshot2")
 # install.packages("htmlwidgets")
 
-
+#install.packages('float')
 library(lubridate)
 library(dplyr)
 library(ggplot2)
@@ -49,11 +54,12 @@ library(terra)
 library(knitr)
 library(tibble)
 library(GGally)
+library(float)
 ```
 
 # Data Wrangling Steps
 
-1.  Convert date columns into for both earthqake and query dataframes: a date_tine column and date column
+1.  Convert date columns into for both earthquake and query dataframes: a date_tine column and date column
 
 2.  Lower the case in all the column names in the earthquake dataframe and remove the period,".", character in the column names
 
@@ -67,7 +73,7 @@ library(GGally)
 
 7.  Replace in NA values of the common columns with values from the corresponding column in the columns from the query dataframe \*word this better again.
 
-8.  Create richter_scale column using the category definition from here [@usgs_magnitude]
+8.  Create richter_scale column using the category definition from [@usgs_magnitude]
 
 ```{r,read_data,echo=FALSE,eval=TRUE}
 
@@ -312,7 +318,7 @@ kable(summ_tab, caption = "earthquake magnitude summary")
 
 Earthquake are mostly distributed above/ to the right of the median earthquake magnitudes; \~60% of ids equal or lie above the median earthquake magnitude \*(look at how this looks geograohically) .
 
-```{r,num_dist_cnt,eval=TRUE,echo=F}
+```{r,num_dist_cnt,eval=F,echo=F}
 # Distribution of p2
 
 medi_an=median(df_earthquake$magnitude)   
@@ -343,7 +349,7 @@ p2=df_earthquake %>%
 p2
 ```
 
-#### Feature Correlations
+### Feature Correlations
 
 In absolute terms, azimuthal gap {enter definition here}shows the highest linear correlation with earthquake magnitude, whilst magnitude seismic stations show the highest overall feature absolute correlations with azimuthal gap and root-mean-square at 35% and 33%, respectively. Root Mean Square and magnitude error show perfect linear correlation- looks like they measure the same thing!
 
@@ -358,7 +364,7 @@ In absolute terms, azimuthal gap {enter definition here}shows the highest linear
 
 # Also explore relationship etween azimuthal gap,rms and earthqake magnitudes
 library(reshape2)
-corr_data=df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror) %>% 
+corr_data=df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror,nst) %>% 
   select(where(is.numeric)) %>% 
   cor(use = "pairwise.complete.obs")
 
@@ -379,9 +385,26 @@ geom_tile() +
 
 ```
 
+```{r pairwise_plot,eval=T,echo=F}
+#| message: false
+#| warning: false
+#| fig-height: 10
+#| fig-width: 15
+#| paged-print: false
+#| label: fig-scatterplot1
+#| fig-cap: "Feature Pairwise Plots"
+
+df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror,nst) %>% 
+  ggpairs(columns=1:10) +
+  labs(title = "Feature Pairwise Plot")+
+  theme_minimal()
+  # aes(color=richter_scale,
+                         #       alpha=0.5))
+```
+
 When looking at the shape of distributions as well as the statistical significance of the correlations, the magnitude shows the significant correlations with the following physical features (the actual physical attributes of the earthquake):
 
--    horizontal distance ( negatively correlated at 1% level of significance)
+-   horizontal distance ( negatively correlated at 1% level of significance)
 
 -   depth ( positively correlated at 1% level of significance)
 
@@ -394,22 +417,6 @@ Whilst the error associated with the measured magnitude, magnitude error, looks 
 -   depth error (positively correlated at 1%)
 
 -   magnitude seismic stations (negatively correlated at 1%)
-
-```{r pairwise_plot,eval=T,echo=F}
-#| message: false
-#| warning: false
-#| fig-height: 10
-#| fig-width: 12
-#| paged-print: false
-#| label: fig-scatterplot1
-#| fig-cap: "Feature Pairwise Plots"
-
-df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror) %>% 
-  ggpairs(columns=1:9) +
-  theme_minimal()
-  # aes(color=richter_scale,
-                         #       alpha=0.5))
-```
 
 ```{r,depth_mag,echo=FALSE,eval=T}
 
@@ -497,11 +504,17 @@ There is also no significant difference in the distributions of this features ac
 
 # Temporal Data Analysis
 
+#### General Earthquake Counts Pear Year
+
 ```{r eq_per_dt, eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
 #| fig-height: 6
-#| fig-width: 12
+#| fig-width: 8
+#| paged-print: false
+#| label: fig-barplots4
+#| fig-cap: "Earthqake occurances over time"
+
 
 p1=df_earthquake %>% select(id,date_final,magnitude) %>% 
   mutate(year_=year(date_final)) %>% 
@@ -511,8 +524,6 @@ p1=df_earthquake %>% select(id,date_final,magnitude) %>%
    mutate(running_avg = rollmean(nr_eq, k =3, fill = NA, align = "right")) %>% 
   ggplot(aes(x=year_,y=nr_eq))+
   geom_col(stat = 'identity')+
-  geom_line(aes(y =running_avg ), color = "blue")+
-  geom_point(aes(y =running_avg ), color = "blue")+
   labs(title = "Number of Earthquakes per year",y='count',
        x= "year") +
   theme_minimal()
@@ -538,47 +549,94 @@ p3=df_earthquake %>% select(id,date_final,depth) %>%
        x = "year") +
   theme_minimal()
  
- p4=df_earthquake %>% select(id,date_final,horizontaldistance) %>% 
+p5=df_earthquake %>% 
+  select(id, date_final, magnitude) %>% 
+  mutate(year_ = year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(
+    nr_eq = n_distinct(id),
+    avg_mg = mean(magnitude)
+  ) %>% 
+  arrange(year_) %>% 
+  mutate(
+    pct_change = (nr_eq - lag(nr_eq)) / lag(nr_eq) * 100,
+    moving_pct_change = rollmean(pct_change, k = 3, fill = NA, align = "right")
+  ) %>%
+  ggplot(aes(x = year_)) +
+
+  geom_line(aes(y = pct_change, color = "Percentage Change")) +
+  geom_point(aes(y = pct_change, color = "Percentage Change")) +
+
+  geom_line(aes(y = moving_pct_change, color = "3-Year Running Average")) +
+  #geom_point(aes(y = moving_pct_change, color = "Percentage Change(%)")) +
+
+  scale_color_manual(
+    name = "",
+    values = c(
+      "Percentage Change" = "blue",
+      "3-Year Running Average" = "purple"
+    )
+  ) +
+
+  labs(
+    title = "Yearly Percentage Change in Earthquake Count",
+    y = "Percentage Change(%)",
+    x = "Year"
+  ) +
+
+  theme_minimal()
+
+nst_p=df_earthquake %>% distinct(id,date_final,nst) %>% 
+  filter(!is.na(nst)) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
-  summarize(nr_eq=n_distinct(id),avg_mg=mean(horizontaldistance)) %>% 
-  ggplot(aes(x=year_,y=avg_mg))+
+  summarize(nst_cnt=sum(nst,rm.na=T)) %>% 
+  ggplot(aes(x=year_,y=nst_cnt))+
   geom_line()+
-  labs(title = "Yearly Average Earthquake Horizontal Distance ",y='avg horizontal diatance',
+  labs(title = "Yearly Count of number of seismic stations (nst)",y='nst count',
        x = "year") +
   theme_minimal()
  
+(p1/p5/nst_p)
  
- (p2|p3)/p1
- 
+#ggplotly(p5)
+
+```
+
+The number of recorded earthquake occurrences has seen a steep increase since 2016, with the number peaking in 2021 (2.2K), showing a 135% increase from the previous year \*find a way to quantify this better over a trend rather than a point change- we also see coincides with the increase in the number of seismic stations around the same time
+
+How does this relate to the number of stations?
+
+```{r,mag_time, eval=TRUE, echo=FALSE}
+
+#| message: false
+#| warning: false
+#| fig-height: 5
+#| fig-width: 8
+#| paged-print: false
+#| label: fig-barplots5
+#| fig-cap: "Earthqake Average magnitudes over time"
+
+
+
+(p2/p3)
+#ggplotly(p3)
+
 
 
 ```
 
-```{r}
-
-# key questions:
-# Look into time of day, do earthquakes tend to happen at certain times in the day,
-#also is the a pattern in their magnitudes?
-# Also look into how this breaks down per earthquake time
-# Also explore relationship etween azimuthal gap,rms and earthqake magnitudes, create a distplot for this
-# How has earthquake accuracy changed over time?
-# Look into temporal correlations (spatial aswell, lookd into this at work)
-# Extract country/location information from place variable in data- see see if we can group time series by location
-
-# df_earthquake %>% select(place,latitude,longitude) %>% filter(!is.na(place))
-# 
-# names(query)
-# 
-# query %>% select(place,latitude,longitude) %>% filter(!is.na(place))
-```
+Yearly average recorded magnitudes were mostly stable, averaging \~5.8 from 1973 to 2015, but saw a \~10% fall from 2015 to 2018 whilst earthqauke average depths have shown a declining trend from 2002
 
 ```{r,hr_day,eval=TRUE, echo=FALSE}
 
 #| message: false
 #| warning: false
-#| fig-height: 6
-#| fig-width: 12
+#| fig-height: 5
+#| fig-width: 8
+#| paged-print: false
+#| label: fig-barplots6
+#| fig-cap: "Earthqake Average Hourly Averages"
 
 
 
@@ -607,51 +665,48 @@ p2=df_earthquake %>% select(dt_date_time,id,magnitude) %>%
 
 
 
-p3=df_earthquake %>% select(dt_date_time,id,magnitude,richter_scale) %>%
-  mutate(hr_day=hour(dt_date_time)) %>%
-  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  group_by(hr_day,richter_scale) %>%
-  summarize(nr_eq=length(id),mean_mg=mean(magnitude)) %>%
-  
-  ggplot(aes(x=hr_day,y=nr_eq,fill=richter_scale))+
-  geom_ridgeline(aes(height=nr_eq))+
-  
-  labs(title = "Counts Grouped by Category",y='count',
-       x= "hour of day") +
-  theme_minimal()
 
 
-p1/p2/p3
+p1/p2
 
 
 ```
 
 ```{r,temp_corr,eval=TRUE, echo=FALSE}
 
-# correlation between rms and magnitude - over time
-# df_earthquake %>% 
-#   mutate(year_=year(dt_date_time)) %>% 
-#   group_by(year_) %>% 
-#   summarise(avg_rms=mean(rms,rm.na=TRUE)) %>% 
-#   ggplot(aes(x=year_,y=avg_rms))+
-#   geom_line()+
-#   labs(title = "Accuracy over time",y='root mean sqaured error',
-#        x= "year") +
-#   theme_minimal()
-
-#df_earthquake %>% select(place,latitude,longitude) %>% filter(!is.na(place))
+#| message: false
+#| warning: false
+#| fig-height: 5
+#| fig-width: 6
+#| paged-print: false
+#| label: fig-barplots7
+#| fig-cap: "Hourly Magnitude Hourly Distributions"
 
 
+p3=df_earthquake %>% select(dt_date_time,id,magnitude,richter_scale) %>%
+  mutate(hr_day=hour(dt_date_time)) %>%
+  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  #group_by(hr_day,richter_scale) %>%
+  #summarize(nr_eq=length(id),mean_mg=mean(magnitude)) %>%
+  ggplot(aes(x=hr_day,y=richter_scale,fill=richter_scale))+
+  geom_density_ridges()+
+  #geom_ridgeline(aes(height=nr_eq))+
+  labs(title = "Distributions of Earthquake Occurances By Hour of Day",y='Scale',x= "hour of day") +
+  theme_minimal()
+
+p3
 
 
 ```
+
+Overall, earthquake occurrences show relatively uniform distributions/counts though out the day, with Extreme scale showing slight peak at the earlier hours of the day.
 
 # Spatial Analysis
 
 ```{r,loc_ext_spcy,eval=F, echo=FALSE}
 # Extract eq locations from the place column using spacy
 # Store results in a csv
-# This code block takes a while
+# This code block takes a while so we use the results readiliy saved in a csv
 
 location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
 
@@ -708,86 +763,13 @@ sdf_earthquake=st_transform(sdf_earthquake, crs=4326)
 
 ```
 
-```{r,countries_plot,eval=T, echo=FALSE}
-
-# plot earthquake freq by location
-# Since there are some eq ids that have two locations tagged to them, use the first location tagged to them?
-# Qs: Top countries by earthqake count-fill by avg magnitude
-# Countries and ricter_scale- which countries experiace which eq type most commonly
-
+```{r,eq_map,eval=F,echo=FALSE}
 
 #| message: false
 #| warning: false
 #| fig-height: 8
 #| fig-width: 12
-
-all_countries <- list_countries() 
-
-
-
-
-# p1=sdf_earthquake %>% mutate(country=case_when(
-#   location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
-#   distinct(id,country,magnitude,location) %>%
-#    group_by(location) %>%
-#   summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
-#   arrange(desc(eq_count)) %>%
-#   head(20) %>%
-#   ggplot(aes(x=reorder(location,-eq_count),y=eq_count,fill=avg_magnitude))+
-#   geom_col(stat = 'identity')+
-#   labs(title = "Top 20 Locations By Earthquke Count ",y='Count',
-#        x= "Country") +
-#   scale_fill_gradient(low = "yellow", high = "red")+
-#   theme_minimal()+
-#   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
-# 
-p2=sdf_earthquake %>% mutate(country=case_when(
-  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
-  distinct(id,country,magnitude) %>%
-   group_by(country) %>%
-  summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
-  arrange(desc(eq_count)) %>%
-  head(20) %>%
-  ggplot(aes(x=reorder(country,-eq_count),y=eq_count,fill=avg_magnitude))+
-  geom_col(stat = 'identity')+
-  labs(title = "Top 20 Countries By Earthquke Count ",y='Count',
-       x= "Country") +
-  scale_fill_gradient(low = "yellow", high = "red")+
-  theme_minimal()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
-
-# 
-p3=sdf_earthquake %>% mutate(country=case_when(
-  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
-  distinct(id,country,magnitude,richter_scale) %>%
-  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
-   group_by(country,richter_scale) %>%
-  summarize(eq_count=n_distinct(id)) %>%
-  group_by(country,richter_scale) %>%
-  arrange(desc(eq_count)) %>%
-  group_by(richter_scale) %>%
-  slice_head(n = 5) %>%
-  ggplot(aes(x=reorder(country,-eq_count),y=eq_count))+
-  geom_col(stat = 'identity')+
-  labs(title = "Top 5 Countries Per Earthquake Ocurrances Facetted by Scale ",y='Count',
-       x= "Country") +
-  facet_wrap(~richter_scale,scales = "free")+
-  #scale_fill_gradient(low = "yellow", high = "red")+
-  theme_minimal()+
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
-
-p2
-p3
-
-
-```
-
-```{r,eq_map,eval=T,echo=FALSE}
-
-#| message: false
-#| warning: false
-#| fig-height: 8
-#| fig-width: 12
+#| fig-cap: "Global Distribution of Earthquake Occurances"
 
 # Since indonesia contains /has the highest occurances of Eq, I'll focus on corrvariables in that reghion (comeback!)
 
@@ -843,6 +825,108 @@ mp
 #webshot("eq_map.html", file = "eq_map.png", vwidth = 1000, vheight = 800,delay = 2)
 
 #knitr::include_graphics("eq_map.png")
+```
+
+![Global Distribution of Earthquakes (1965-2025)](eq_global_distribution.png)
+
+```{r,top_countries_plot,eval=T, echo=FALSE}
+
+
+#| message: false
+#| warning: false
+#| fig-height: 5
+#| fig-width: 6
+#| paged-print: false
+#| label: fig-barplots8
+#| fig-cap: "Earthquake Counts Per Country, Colored By Average Magnitude"
+
+all_countries <- list_countries() 
+
+p2=sdf_earthquake %>% mutate(country=case_when(
+  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
+  distinct(id,country,magnitude) %>%
+   group_by(country) %>%
+  summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
+  arrange(desc(eq_count)) %>%
+  head(20) %>%
+  ggplot(aes(x=reorder(country,-eq_count),y=eq_count,fill=avg_magnitude))+
+  geom_col(stat = 'identity')+
+  labs(title = "Top 20 Countries By Earthquke Count ",y='Count',
+       x= "Country") +
+  scale_fill_gradient(low = "yellow", high = "red")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+
+# 
+
+p2
+
+
+
+
+
+```
+
+Indonesia has the highest number of recorded earthquakes, whilst the gighrst average magnitudes are observed for Figi and Ecuador. When split by scale, Indonesia still shows the highest number of occurrences across both Strong and Moderate earthqake scales.
+
+```{r,top_countries_plot_scale,eval=T, echo=FALSE}
+
+
+#| message: false
+#| warning: false
+#| fig-height: 8
+#| fig-width: 6
+#| paged-print: false
+#| label: fig-barplots8
+#| fig-cap: "Earthquake Counts Per Country, Colored By Average Magnitude"
+
+# plot earthquake freq by location
+# Since there are some eq ids that have two locations tagged to them, use the first location tagged to them?
+# Qs: Top countries by earthqake count-fill by avg magnitude
+# Countries and ricter_scale- which countries experiace which eq type most commonly
+
+p3=sdf_earthquake %>% mutate(country=case_when(
+  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
+  distinct(id,country,magnitude,richter_scale) %>%
+  mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+   group_by(country,richter_scale) %>%
+  summarize(eq_count=n_distinct(id)) %>%
+  group_by(country,richter_scale) %>%
+  arrange(desc(eq_count)) %>%
+  group_by(richter_scale) %>%
+  slice_head(n = 5) %>%
+  ggplot(aes(x=reorder(country,-eq_count),y=eq_count,fill = richter_scale))+
+  geom_col(stat = 'identity')+
+  labs(title = "Top 5 Countries Per Earthquake Ocurrances Facetted by Scale ",y='Count',
+       x= "Country") +
+  facet_wrap(~richter_scale,scales = "free")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+
+p3
+
+```
+
+```{r,count,eval=F,echo=F}
+#sdf_earthquake_countries
+#plot(world['name'])
+
+sdf_joined = st_join(
+  st_transform(wc, 3857),                
+  st_transform(sdf_earthquake, 3857),     
+  join = st_is_within_distance,
+  dist = 50000 * 2,
+  left = TRUE
+)
+
+sdf_country = sdf_joined %>%
+  group_by(country_final) %>%   # adjust column name
+  summarise(
+    nr_eq = n_distinct(id),               # or n_distinct(id)
+    .groups = "drop"
+  )
+
+plot(sdf_country['nr_eq'])
 ```
 
 ```{r,stat_map,eval=T,echo=FALSE}
