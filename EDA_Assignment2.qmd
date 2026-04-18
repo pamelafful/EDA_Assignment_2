@@ -46,6 +46,9 @@ library(skimr)
 library(webshot2)
 library(htmlwidgets)
 library(terra)
+library(knitr)
+library(tibble)
+library(GGally)
 ```
 
 # Data Wrangling Steps
@@ -74,28 +77,18 @@ earth_quakes=read.csv("Earthquakes_1965_2016.csv")
 
 ```
 
-Data Dimensions
-
-```{r,data_det,echo=FALSE,eval=TRUE}
+```{r,data_det,echo=FALSE,eval=F}
 # check query df details
 dim(query)
 dim(earth_quakes)
 ```
 
-Convert time characters to date variables for both dataframes
-
-Create truncated date variables, only including the date part
-
 ```{r,date_con,echo=FALSE,eval=TRUE}
 # Change date columns to datetime
 query$dt_date_time=ymd_hms(query$time)
 query$date_final=date(query$dt_date_time)
-query %>% filter(is.na(dt_date_time))
-
 
 ```
-
-Earthquakes data
 
 ```{r date_con_2, eval=TRUE, echo=FALSE}
 #| message: true
@@ -134,9 +127,6 @@ colnames(earth_quakes_final)=gsub("\\.","",colnames(earth_quakes_final))
 # lower the case of the ID values
 earth_quakes_final$id=tolower(earth_quakes_final$id)
 earth_quakes_final$type=tolower(earth_quakes_final$type)
-
-
-
 ```
 
 ```{r,df_join,echo=FALSE,eval=TRUE}
@@ -215,9 +205,6 @@ mutate(status=case_when(is.na(status) & !is.na(status_query)~ status_query,
 
 
 
-#df_earthquake %>% filter(!is.na(place)) %>% head() %>% select(place)
-
-
 ```
 
 ```{r,mag_cat,echo=FALSE,eval=TRUE}
@@ -248,7 +235,6 @@ df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
 )
                          ) %>% pull(richter_scale)
 
-#df_earthquake %>% filter(!is.na(place)) %>% head() %>% select(place)
 
 ```
 
@@ -262,38 +248,88 @@ df_earthquake=df_earthquake %>% select(all_of(keep_cols))
 
 # General Data Analysis
 
-Find count/frequency of earth quake types per magnitude
+#### Earthquake Magnitude Distributions
 
 ```{r,df_attr,eval=TRUE,echo=FALSE}
 
 # comeback and find a tidyier way of showing this
-#skim(df_earthquake)
+#names(skim(df_earthquake))
 ```
 
-```{r,mg_summ}
+```{r,mg_summ,echo=F,eval=T}
+
+#| message: false
+#| warning: false
+#| fig-height: 10
+#| fig-width: 10
+#| paged-print: false
+#| label: fig-barplot1
+#| fig-cap: "Counts of Earthquake Counts Per Scale Category"
+
 # Magnitude summary Statistics
-summary(df_earthquake$magnitude)
 
-```
-
-```{r,bar_plot,echo=FALSE,eval=TRUE}
-
-p1=df_earthquake %>%  
+# Total number of inidividual eq
+df_earthquake %>%  
   distinct(id,richter_scale) %>% 
   mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  ggplot(aes(x=richter_scale))+
-  geom_bar()+
-  labs(title = "Counts of Earthquake Categories",
-       x = "magnitude category") +
+  group_by(richter_scale) %>% 
+  summarize(scale_total=length(id)) %>% 
+  mutate(percentage=scale_total/sum(scale_total),
+         label=scales::percent(percentage)) %>% 
+  ggplot(aes(x = richter_scale, y = scale_total)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = label), vjust = -0.5) +
+  labs(title = "Counts of Earthquakes Per Scale Category",
+       x = "scale",y='count')+
+  scale_y_continuous(limits = c(0, 30000))+
   theme_minimal()
+  
 
-# df_earthquake %>%  
-#   select(magnitude,richter_scale) %>% 
-#   ggplot(aes(x=magnitude,fill=richter_scale))+
-#   geom_histogram(position = "identity", alpha = 0.6, binwidth = 0.5)+
-#   labs(title = "Earth Quake Magnitudes Per Richter Scale Category (All Magnitude Types)",
-#        x = "magnitude") +
-#   theme_minimal()
+```
+
+In total, there have been \~34.1K recorded unique instances of earthquakes from 1965 to 2013. By category, Moderate category earthquakes dominate accounting for \~76% of recorded IDs.
+
+```{r,counts,eval=TRUE,echo=F}
+
+#| message: false
+#| warning: false
+#| fig-height: 8
+#| fig-width: 10
+#| paged-print: false
+
+
+summ_tab=as_tibble_row(summary(df_earthquake$magnitude))
+
+summ_tab$Total=df_earthquake %>% summarize(n_distinct(id)) %>% pull()
+summ_tab=summ_tab %>% relocate(Total)
+colnames(summ_tab)=c('Total','Min','Q1','Median','Mean','Q3','Max')
+
+
+kable(summ_tab, caption = "earthquake magnitude summary")
+
+
+```
+
+Earthquake are mostly distributed above/ to the right of the median earthquake magnitudes; \~60% of ids equal or lie above the median earthquake magnitude \*(look at how this looks geograohically) .
+
+```{r,num_dist_cnt,eval=TRUE,echo=F}
+# Distribution of p2
+
+medi_an=median(df_earthquake$magnitude)   
+
+df_earthquake %>% distinct(id,magnitude) %>% 
+  mutate(gr_med=case_when(magnitude>=medi_an~1,
+                          magnitude<medi_an~0)
+         ) %>% summarize(total_gr=sum(gr_med),count_total=length(gr_med)) %>% 
+  mutate(percentage=(total_gr/count_total)*100)
+```
+
+```{r,mag_dist,eval=TRUE,echo=F}
+#| message: false
+#| warning: false
+#| paged-print: false
+#| label: fig-barplot
+#| fig-cap: "Distribution of Earthquake Magnitudes"
 
 p2=df_earthquake %>%  
   select(magnitude,richter_scale) %>% 
@@ -304,138 +340,25 @@ p2=df_earthquake %>%
        y = "magnitude") +
   theme_minimal()
 
-p1/p2
-
-
-  
+p2
 ```
 
-```{r,depth_mag,echo=FALSE,eval=TRUE}
+#### Feature Correlations
 
-p1=df_earthquake %>%  
-  select(magnitude,depth,richter_scale) %>% 
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  ggplot(aes(x=richter_scale,y=depth))+
-  geom_boxplot()+
-  labs(title = "Depth vs Earthquake Category",
-       y = 'earth quake depth') +
-  theme_minimal()
-
-
-p2=df_earthquake %>% filter(!is.na(depth)) %>% 
-
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  group_by(richter_scale) %>% 
-  summarise(mean_depth=mean(depth)) %>% 
-  
-  ggplot(aes(x=richter_scale,y=mean_depth))+
-  geom_col(stat = 'identity')+
-  labs(title = "Average horizontal distance per earthquake category",
-       y = "depth") +
-  theme_minimal()
-
-p1/p2
-
-
-
-```
-
-```{r dist_mag, eval=TRUE, echo=FALSE}
-#| message: false
-#| warning: false
-#| fig-height: 6
-#| fig-width: 12
-#| paged-print: false
-
-p1=df_earthquake %>% filter(!is.na(horizontaldistance)) %>% 
-
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  ggplot(aes(x=horizontaldistance,color=richter_scale))+
-  geom_histogram(position = "identity", alpha = 0.6, binwidth = 0.5)+
-  labs(title = "Depth vs Earthquake Magnitude",
-       y = "horizontal diatnce") +
-  theme_minimal()
-
-
-p2=df_earthquake %>% filter(!is.na(horizontaldistance)) %>% 
-
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  group_by(richter_scale) %>% 
-  summarise(mean_hd=mean(horizontaldistance)) %>% 
-  
-  ggplot(aes(x=richter_scale,y=mean_hd))+
-  geom_col(stat = 'identity')+
-  labs(title = "Average horizontal distance per earthquake category",
-       y = "horizontal diatnce") +
-  theme_minimal()
-
-p3=df_earthquake %>%
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
-  ggplot(aes(x=magnitude,y=horizontaldistance))+
-  stat_cor(method = "pearson", label.x =6, label.y = 30)+
-  geom_point()+
-  geom_smooth()+
-  labs(title = "Horizontal Distance vs Magnitude",x='magnitude',
-       y = 'distance') +
-  theme_minimal()
-
-
-
-
-p4=df_earthquake %>%
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
-  ggplot(aes(x=magnitude,y=depth))+
-  stat_cor(method = "pearson", label.x =8.5, label.y = 600)+
-  geom_point()+
-  geom_smooth()+
-  labs(title = "Depth vs Magnitude",x='magnitude',
-       y = 'depth') +
-  theme_minimal()
-
-(p1+p2)/(p3+p4)
-
-
-
-```
-
-```{r}
-# Largest earthquakes in terms of magnitude
-# Look at earthquakes in the 3rd quartile and higher
-# third_qaurtile=summary(df_earthquake$magnitude)[[4]] # the mean
-# 
-# 
-# gr_mag_3rd_quatile=df_earthquake %>% 
-#   group_by(richter_scale) %>%
-#   summarize(grouped_mean_mg=mean(magnitude))
-# 
-# left_join(df_earthquake,gr_mag_3rd_quatile, by ='richter_scale') %>% 
-#   mutate( is_greater=
-#   case_when(magnitude>=grouped_mean_mg~ 1,
-#             magnitude<grouped_mean_mg~0)
-#   
-#   ) %>% 
-#   select(id,richter_scale,magnitude,grouped_mean_mg,is_greater) %>% 
-#   group_by(richter_scale) %>% 
-#   summarize(total_ids=length(id),total_gr=sum(is_greater)  ) %>% 
-#   mutate(percentage=(total_gr/total_ids))
-  
-
-
-
-
-
-
-
-```
+In absolute terms, azimuthal gap {enter definition here}shows the highest linear correlation with earthquake magnitude, whilst magnitude seismic stations show the highest overall feature absolute correlations with azimuthal gap and root-mean-square at 35% and 33%, respectively. Root Mean Square and magnitude error show perfect linear correlation- looks like they measure the same thing!
 
 ```{r az_rms_mg,eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
 #| fig-height: 6
 #| fig-width: 8
+#| label: fig-heatmap1
+#| fig-cap: "Feature Correlation Matrix"
+
+
 # Also explore relationship etween azimuthal gap,rms and earthqake magnitudes
 library(reshape2)
-corr_data=df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations) %>% 
+corr_data=df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror) %>% 
   select(where(is.numeric)) %>% 
   cor(use = "pairwise.complete.obs")
 
@@ -453,24 +376,124 @@ geom_tile() +
 
 
   
-```
-
-```{r}
-# df_earthquake %>% select(id,time.x,time.y,dt_date_time,magnitude) %>% 
-#   mutate(year_=year(dt_date_time)) %>% 
-#   group_by(year_) %>% 
-#   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
-#   filter(nr_eq==max(nr_eq))
-# 
-# df_earthquake %>% mutate(year_=year(dt_date_time)) %>%
-# select(id,time.x,time.y,dt_date_time,magnitude,year_) %>%
-#   filter(is.na(year_))
-# 
-# df_earthquake %>% filter(is.na(year(dt_date_time))) %>% 
-#   select(dt_date_time)
-
 
 ```
+
+When looking at the shape of distributions as well as the statistical significance of the correlations, the magnitude shows the significant correlations with the following physical features (the actual physical attributes of the earthquake):
+
+-    horizontal distance ( negatively correlated at 1% level of significance)
+
+-   depth ( positively correlated at 1% level of significance)
+
+Whilst the error associated with the measured magnitude, magnitude error, looks to be significantly correlated with the following:
+
+-   azimuthal gap (positively correlated at 1%)
+
+-   magnitude (positively correlated at 5%)
+
+-   depth error (positively correlated at 1%)
+
+-   magnitude seismic stations (negatively correlated at 1%)
+
+```{r pairwise_plot,eval=T,echo=F}
+#| message: false
+#| warning: false
+#| fig-height: 10
+#| fig-width: 12
+#| paged-print: false
+#| label: fig-scatterplot1
+#| fig-cap: "Feature Pairwise Plots"
+
+df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror) %>% 
+  ggpairs(columns=1:9) +
+  theme_minimal()
+  # aes(color=richter_scale,
+                         #       alpha=0.5))
+```
+
+```{r,depth_mag,echo=FALSE,eval=T}
+
+#| message: false
+#| warning: false
+#| fig-height: 10
+#| fig-width: 12
+#| paged-print: false
+#| label: fig-barplots2
+#| fig-cap: "Average Earthquake Depth Per Scale Category"
+
+
+p1=df_earthquake %>%  
+  select(magnitude,depth,richter_scale) %>% 
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+  #group_by(richter_scale) %>% 
+  #summarize(avg_depth=mean(depth,rm.na=T)) %>% 
+  ggplot(aes(y=depth,color=richter_scale))+
+  geom_boxplot() +
+  labs(title = "Earthquake Depth Distribution Per Scale",
+       y = 'depth') +
+  theme_minimal()
+
+
+p2=df_earthquake %>% filter(!is.na(depth)) %>% 
+
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  group_by(richter_scale) %>% 
+  summarise(mean_depth=mean(depth)) %>% 
+  
+  ggplot(aes(x=richter_scale,y=mean_depth))+
+  geom_col(fill = "steelblue") +
+  labs(title = "Average Earthquake Depth Scale Category",
+       y = "avg depth", x='scale') +
+  theme_minimal()
+
+p1/p2
+
+```
+
+Major earthquake types record the highest average depth across magnitude scales, although the distribution of depth across these scales do not show a statistical difference in these values\* bold claim here!
+
+```{r dist_mag, eval=F, echo=FALSE}
+
+#| message: false
+#| warning: false
+#| fig-height: 10
+#| fig-width: 12
+#| paged-print: false
+#| label: fig-barplots3
+#| fig-cap: "Average Earthquake Horizontal Distance Per Scale Category"
+
+
+p1=df_earthquake %>%  
+  select(magnitude,richter_scale,horizontaldistance) %>% 
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+  #group_by(richter_scale) %>% 
+  #summarize(avg_depth=mean(depth,rm.na=T)) %>% 
+  ggplot(aes(y=horizontaldistance,color=richter_scale))+
+  geom_boxplot() +
+  labs(title = "Earthquake Horizontal Distance Distribution Per Scale",
+       y = 'horizontal distance') +
+  theme_minimal()
+
+
+p2=df_earthquake %>% select(horizontaldistance,richter_scale) %>% filter( !is.na(horizontaldistance) ) %>%  
+    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
+  group_by(richter_scale) %>% 
+  summarise(mean_dist=mean(horizontaldistance,rm.na=T)) %>% 
+  ggplot(aes(x=richter_scale,y=mean_dist))+
+  geom_col(fill = "steelblue") +
+  labs(title = "Average Horizontal Distance Per Scale Category",
+       y = "avg h.distance", x='scale') +
+  theme_minimal()
+
+p1/p2
+
+
+
+
+```
+
+The average horizontal distance is highest for moderate earthquake types - although there are a LOT of null values for this feature so...\*\
+There is also no significant difference in the distributions of this features across scale categories.\
 
 # Temporal Data Analysis
 
@@ -850,47 +873,4 @@ raster_result = rasterize(
 plot(raster_result)
 
 # look into contour plots for eq magnitude, deoth and horzontal distance and other vars!!!!!
-```
-
-```{r}
-# map id with # na values in the place feature with inbuit dataset
-world_countries <- ne_countries(scale = "medium", returnclass = "sf")
-
-wc=world_countries %>% select(name,geometry) %>% rename(country_=name)
-na_country=st_join(sdf_earthquake,wc,join=st_intersects,left=T) %>% 
-  filter(is.na(country_)) %>% distinct(place,location)
-
-st_join(sdf_earthquake,wc,join=st_intersects,left=T) %>% 
-  mutate(country_fill=coalesce(country_,location)) %>% 
-  mutate(location_fill=coalesce(location,country_)) %>% 
-  mutate(country_final= coalesce(country_fill,location_fill)) %>% 
-  mutate(country_final=coalesce(country_final,'Unknown'))
-  select(id,place,country_,location,country_,country_final) %>% 
-  
-
-
-mp=leaflet(na_country) %>%
-  addTiles() %>%
-  addCircleMarkers(
-    radius = ~magnitude,   
-    color = "purple",       
-    weight = 1,             
-    opacity = 1,               
-    fillColor = ~col_pal(magnitude), 
-    fillOpacity = 0.8,         
-    stroke = TRUE
-    #label = ~country
-  ) %>%
-  addLegend(
-    pal = col_pal, 
-    values = ~magnitude, 
-    position = "bottomright", 
-    title = "Magnitude"
-  )
-mp
-```
-
-```{r}
-oceans<- ne_download(scale = "medium", type = "ocean", category = "physical",returnclass = "sf")
-oceans
 ```
