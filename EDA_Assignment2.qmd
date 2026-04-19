@@ -907,9 +907,12 @@ p3
 
 ```
 
-```{r,count,eval=F,echo=F}
+Method- Performing a unary/dissolve join across all the point geometries that are in close proximity to the extracted country labels transforming the geomotries into country choropleths color-coded by the average magnitude of earthquakes across those polygons.
+
+```{r,country_polygons,eval=F,echo=F}
 #sdf_earthquake_countries
 #plot(world['name'])
+# This chunck takes a while to run
 
 sdf_joined = st_join(
   st_transform(wc, 3857),                
@@ -920,14 +923,51 @@ sdf_joined = st_join(
 )
 
 sdf_country = sdf_joined %>%
-  group_by(country_final) %>%   # adjust column name
+  group_by(country_final,magnitude) %>%   # adjust column name
   summarise(
     nr_eq = n_distinct(id),               # or n_distinct(id)
     .groups = "drop"
   )
 
-plot(sdf_country['nr_eq'])
+#plot(sdf_country['nr_eq'])
+
+country_geometries=sdf_country%>% select(country_final,magnitude) %>% filter(country_final!='Unknown') # remove unknown geometries
+
+st_write(country_geometries, "country_geometries.gpkg")
+
+
+
+
+
 ```
+
+```{r,country_appr,eval=F,echo=F}
+# Read in file
+country_geometries=st_read('country_geometries.gpkg')
+plot_df=country_geometries %>% group_by(country_final) %>% 
+  summarise(mean_magnitude=mean(magnitude))
+#plot(plot_df['mean_magnitude'])
+
+plot_df=st_transform(plot_df, 4326)
+
+pal = colorNumeric(palette = "YlOrRd", domain = plot_df$mean_magnitude)
+
+# 3. Build the map
+cp=leaflet(plot_df) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(mean_magnitude),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    fillOpacity = 0.7,
+    label = ~paste0(country_final, ": ",mean_magnitude) # Tooltip on hover
+  ) %>%
+  addLegend(pal = pal, values = ~mean_magnitude, opacity = 0.7, title = "Magnitude", position = "bottomright")
+
+```
+
+![Approximate Earthquake Spatial Distribution](country_chloropleths.png){#country_chloropleths}
 
 ```{r,stat_map,eval=T,echo=FALSE}
 
