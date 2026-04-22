@@ -33,31 +33,89 @@ library(tibble)
 library(GGally)
 library(float)
 library(htmltools)
+library(shinydashboard)
 
 sdf_eq=st_read('sdf_earthquake.gpkg')
+sdf_eq_countries=st_read('country_geometries.gpkg')
+
+# id_country_geom=st_join(
+#        st_transform(sdf_eq, 3857),                
+#        st_transform(sdf_eq_countries, 3857),     
+#        join = st_is_within_distance,
+#        dist = 50000 * 2,
+#        left = TRUE
+#   )
+
+
+
+country_geom=sdf_eq_countries %>% group_by(country_final) %>% summarize()
+
+ids=sdf_eq %>% select(id,date_final,magnitude,country_final) %>% st_drop_geometry()
+id_country_geom=st_as_sf(inner_join(ids,country_geom, by=('country_final')))
+
+
+
+
+
 
 # Define UI for application that draws a histogram
-ui <- fluidPage(
 
-    # Application title
-    titlePanel("Spatial Distribution of Earthquake Occurances"),
+# ui <- dashboardPage(
+#   dashboardHeader(title='Earthqake Tracker'),
+#   dashboardSidebar(),
+#   dashboardBody(
+#     fluidRow(
+#       box(leafletOutput("spatial_plot", height = 250)),
+#       
+#       box(
+#         title = "Date Slider",
+#         sliderInput("Year", "Date Slider:", min(year(sdf_eq$date_final)), max(year(sdf_eq$date_final)), 2020)
+#     
+#       )
+#   ),
+#   
+#   fluidRow(
+#     box(leafletOutput("country_spatial_plot", height = 250)),
+#     
+#     box(
+#       title = "Date Slider",
+#       sliderInput("Year", "Date Slider:", min(year(sdf_eq$date_final)), max(year(sdf_eq$date_final)), 2020)
+#       
+#     )
+#   )
+# )
+# )
 
-    # Sidebar with a slider input for number of bins 
-    sidebarLayout(
-        sidebarPanel(
-            sliderInput("Year",
-                        "Year Range:",
-                        min = min(year(sdf_eq$date_final)),
-                        max = max(year(sdf_eq$date_final)),
-                        value = 2020)
-        ),
 
-        # Show a plot of the generated distribution
-        mainPanel(
-          leafletOutput("spatial_plot")
-        )
+
+
+
+
+ui <- dashboardPage(
+  dashboardHeader(title='Earthquake Tracker'),
+  dashboardSidebar(),
+  dashboardBody(
+    fluidRow(
+      box(
+        title = "Date Slider",
+        sliderInput("Year", "Date Slider:", min(year(sdf_eq$date_final)), max(year(sdf_eq$date_final)), 2020)
+      )
+    ),
+    
+    fluidRow(
+      box(
+        title = "Global Earthquake Occurance",
+        leafletOutput("spatial_plot", height = 250)
+      ),
+      
+      box(
+        title = "Country Level Magnitude Averages",
+        leafletOutput("country_spatial_plot", height = 350)
+      )
     )
+  )
 )
+
 
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
@@ -104,7 +162,52 @@ server <- function(input, output, session) {
         title = "Magnitude"
       )
   })
+  
+  output$country_spatial_plot <- renderLeaflet({
+    country_map=id_country_geom %>% 
+      mutate(year_=year(date_final)) %>% 
+      filter(year_==input$Year &country_final!='Unknown') %>% 
+      group_by(country_final,year_) %>% 
+      summarize(mean_mg=mean(magnitude))
+    
+    country_map=st_transform(country_map, 4326) 
+    pal = colorNumeric(palette = "YlOrRd", domain = country_map$mean_mg)
+    
+    
+    
+    labels <- lapply(seq_len(nrow(country_map)), function(i) {
+      HTML(paste0(
+        "Country: ", country_map$country_final[i], "<br/>",
+        "Average Magnitude: ", round(country_map$mean_mg[i]), "<br/>"
+      ))
+    })
+    
+    leaflet(country_map) %>%
+      addTiles() %>%
+      addPolygons(
+        fillColor = ~pal(mean_mg),
+        weight = 1,
+        opacity = 1,
+        color = "white",
+        fillOpacity = 0.7,
+        label = labels # Tooltip on hover
+      ) %>%
+      addLegend(pal = pal, 
+                values = ~mean_mg, 
+                opacity = 0.7, 
+                title = "Average Magnitude", 
+                position = "bottomright")
+    
+    
+  })
+  
 }
+
+
+
+
+
+
 
 # Run the application 
 shinyApp(ui = ui, server = server)
