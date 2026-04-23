@@ -55,6 +55,7 @@ library(knitr)
 library(tibble)
 library(GGally)
 library(float)
+library(htmltools)
 ```
 
 # Data Wrangling Steps
@@ -557,6 +558,8 @@ p1=df_earthquake %>% select(id,date_final,magnitude) %>%
   labs(title = "Number of Earthquakes per year",y='count',
        x= "year") +
   theme_minimal()
+
+
   
  p2=df_earthquake %>% select(id,date_final,magnitude) %>% 
   mutate(year_=year(date_final)) %>% 
@@ -614,6 +617,18 @@ p5=df_earthquake %>%
     x = "Year"
   ) +
 
+  theme_minimal()
+
+p6=df_earthquake %>% select(id,date_final,magnitude) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
+  arrange(year_) %>% 
+   mutate(running_avg = rollmean(nr_eq, k =3, fill = NA, align = "right")) %>% 
+  ggplot(aes(x=year_,y=nr_eq,fill='blue'))+
+  geom_col(stat = 'identity')+
+  labs(title = "Number of Earthquakes per year",y='count',
+       x= "year") +
   theme_minimal()
 
 
@@ -776,13 +791,7 @@ Overall, earthquake occurrences show relatively uniform distributions/counts tho
 Location/Country Extraction Method:
 
 -   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column (where available) and save these extracted values in a dataframe/csv file named "location_entities." Then, join this data back to the \`df_earthquake\` DataFrame using the "id" key. After joining, convert the resulting dataframe into a spatial dataframe called \`sdf_earthquake\`.
-
-<!-- -->
-
 -   Next, use the built-in **countries** spatial dataframe from the Rnaturalearth package, which contains a list of countries and their geometries. Perform a spatial join with \`sdf_earthquake\` using the **st_is_within_distance** predicate, which joins geometries that are within a specified distance of each other. In this case, apply a threshold of 50 kilometers, allowing country locations to be tagged to earthquake IDs that occurred within 50 kilometers of a country's geometry.
-
-<!-- -->
-
 -   Finally, tag the location of any IDs that could not be extracted using the methods mentioned above as "Unknown."
 
 ```{r,loc_ext_spcy,eval=F, echo=FALSE}
@@ -842,6 +851,7 @@ sdf_earthquake=st_join(st_transform(sdf_earthquake, 3857),st_transform(wc, 3857)
   
   
 sdf_earthquake=st_transform(sdf_earthquake, crs=4326)
+#st_write(sdf_earthquake, "sdf_earthquake.gpkg")
 
 ```
 
@@ -877,7 +887,15 @@ id_df=sdf_earthquake %>%
   filter( !is.na(country)) %>% 
   distinct(id,country,magnitude,location,richter_scale,geometry)
 
-
+labels = lapply(seq_len(nrow(sdf_earthquake)), function(i) {
+  HTML(paste0(
+    "ID", sdf_earthquake$id[i], "</strong><br/>",
+    "Country: ", sdf_earthquake$country_final[i], "<br/>",
+    "magnitude: ", sdf_earthquake$magnitudel[i], "<br/>",
+    "horizontal distance: ", sdf_earthquake$horizontaldistance[i], "<br/>",
+    "depth: ", sdf_earthquake$depth[i], "<br/>"
+  ))
+})
 
 mp=leaflet(id_df) %>%
   addTiles() %>%
@@ -889,7 +907,7 @@ mp=leaflet(id_df) %>%
     fillColor = ~col_pal(magnitude), 
     fillOpacity = 0.8,         
     stroke = TRUE,
-    label = ~country
+    label = ~labels
   ) %>%
   addLegend(
     pal = col_pal, 
@@ -1041,9 +1059,29 @@ p3=sdf_earthquake %>% mutate(country=case_when(
 p3
 ```
 
-```{r}
- #(look at how this looks geograohically)  
-# which countries had eqs abve the median for all the eqs that happended thesre, lie above the median
+```{r,bubble,eval=T, echo=FALSE}
+
+# Also look into earthqake frequency,number of earthquakes in unit span of time per countrt
+# Which countries experiance more eqs than others?- potential hotspots
+
+
+
+country_counts=sdf_earthquake %>% filter(!is.na(nst)) %>% 
+group_by(country_final) %>% summarize(nr_occurances=n_distinct(id), mean_mg=mean(magnitude),mean_nst=mean(nst,rm.na=T), mean_hs=mean(horizontaldistance,rm.na=T))
+
+min_val=min(country_counts$nr_occurances)
+
+max_val=max(country_counts$nr_occurances)
+
+country_counts %>%
+  ggplot(aes(x = mean_nst, y =mean_mg, size = nr_occurances)) +
+  geom_point(alpha = 0.5) +  # Alpha adds transparency to handle overlapping
+  scale_size(range = c(1,10))+
+    labs(title = "Avg Magnitude vs Avg Number of Siesmic Stations (NST)  ",y='mean magnitude',x= "NST")+
+  theme_minimal()
+
+
+
 ```
 
 ```{r,stat_map,eval=F,echo=FALSE}
@@ -1079,6 +1117,6 @@ nrow(indo)
 # look into contour plots for eq magnitude, deoth and horzontal distance and other vars!!!!!
 ```
 
-## References  {.appendix}
+## References {.appendix}
 
 ![Global Earthquake Occurrences (1965-2024)](eq_global_distribution.png)
