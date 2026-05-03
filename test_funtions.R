@@ -13,7 +13,8 @@ world_countries <- ne_countries(scale = "medium", returnclass = "sf")
 
 wc=world_countries %>% select(name,geometry) %>% rename(country_=name)
 
-
+library(lubridate)
+sdf_eq %>% mutate(yr=floor_date(date_final,unit='month')) %>% pull(yr)
 
 
 country_map=id_country_geom %>% 
@@ -154,5 +155,172 @@ df <- data.frame(
 ggplot(df, aes(x = x, y = y, size = size_var, color = group)) +
   geom_point(alpha = 0.5) +  # Alpha adds transparency to handle overlapping
   scale_size(range = c(1, 15))
+
+######countor line plot test####
+
+library(ggplot2)
+
+# Basic example using the built-in volcano dataset
+df <- as.data.frame(as.table(volcano))
+colnames(df) <- c("x", "y", "z")
+df$x <- as.numeric(df$x)
+df$y <- as.numeric(df$y)
+
+ggplot(df, aes(x, y, z = z)) +
+  geom_contour_filled()
+
+
+
+start = min(floor_date(sdf_eq$date_final,unit='month'))
+end = max(floor_date(sdf_eq$date_final,unit='month'))
+min = min(month(sdf_eq$date_final))
+max = max(month(sdf_eq$date_final))
+
+input.Year=c(start ,end)
+
+input.Country_Filter=c('Afghanistan')
+
+country_map=id_country_geom %>%
+  mutate(date_month=floor_date(date_final,unit='month')) %>% 
+  mutate(year_=year(date_final)) %>%
+  filter(date_month>=input.Year[1] & date_month<=input.Year[2] & country_final %in% input.Country_Filter & country_final !='Unknown') %>%
+  group_by(country_final,year_) %>%
+  summarize(mean_mg=mean(magnitude))
+
+id_df <- sdf_eq %>% mutate(date_month=floor_date(date_final,unit='month')) %>% 
+  filter(date_month>=input.Year[1] & date_month<=input.Year[2] & country_final !='Unknown')%>% 
+  
+  #filter(year(date_final) == input$Year) 
+  distinct(id, country_final, magnitude, location, 
+           richter_scale, horizontaldistance, geom, depth)
+
+
+
+
+
+country_options=sdf_eq %>% distinct(country_final) %>% pull()
+scale_options=sdf_eq %>% distinct(richter_scale) %>% pull()
+continent_options=sdf_eq %>% distinct(continent) %>% pull()
+input=list(Year=c(start ,end),Country_Filter=country_options, Scale_Filter=scale_options,Continent_Filter=continent_options)
+
+
+bc=sdf_earthquake %>%  mutate(date_month=floor_date(date_final,unit='month')) %>% 
+  mutate(year_=year(date_final)) %>%
+  filter(date_month>=input$Year[1] & date_month<=input$Year[2] & !is.na(continent) & richter_scale %in% input$Scale_Filter  ) %>% 
+  group_by(continent) %>% 
+  mutate(cont_occ_sum = n_distinct(id)) %>%
+  ungroup() %>%  
+  mutate(
+    country_final = reorder(continent, -cont_occ_sum)  
+  ) %>% 
+  ggplot(aes(x = nst, y =magnitude, size = cont_occ_sum,color=continent)) +
+  geom_point(alpha = 0.5) +  
+  scale_size(range = c(1,5))+
+  labs(title = "Avg Magnitude vs Avg Number of Siesmic Stations (NST)  ",y='magnitude',x= "NST",
+       color='continent',size='')+
+  theme_minimal()
+
+ggplotly(bc)
+
+
+
+
+
+
+
+pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain = sdf_eq$magnitude
+)
+
+if(length(input$Country_Filter)!=0){
+  country_map=id_country_geom %>%
+    mutate(date_month=floor_date(date_final,unit='month')) %>% 
+    mutate(year_=year(date_final)) %>%
+    filter(date_month>=input$Year[1] & date_month<=input$Year[2] & country_final %in% input$Country_Filter ) %>%
+    group_by(country_final,year_) %>%
+    summarize(mean_mg=mean(magnitude))
+  
+  id_df <- sdf_eq %>% mutate(date_month=floor_date(date_final,unit='month')) %>% 
+    filter(date_month>=input$Year[1] & date_month<=input$Year[2] & country_final !='Unknown' & country_final %in% input$Country_Filter)%>% 
+    distinct(id, country_final, magnitude, location, 
+             richter_scale, horizontaldistance, geom, depth)
+  
+}else{
+  country_map=id_country_geom %>%
+    mutate(date_month=floor_date(date_final,unit='month')) %>% 
+    mutate(year_=year(date_final)) %>%
+    filter(date_month>=input$Year[1] & date_month<=input$Year[2] & country_final !='Unknown') %>%
+    group_by(country_final,year_) %>%
+    summarize(mean_mg=mean(magnitude))
+  
+  
+  id_df <- sdf_eq %>% mutate(date_month=floor_date(date_final,unit='month')) %>% 
+    filter(date_month>=input$Year[1] & date_month<=input$Year[2] & country_final !='Unknown')%>% 
+    distinct(id, country_final, magnitude, location, 
+             richter_scale, horizontaldistance, geom, depth)
+  
+}
+
+
+country_map=st_transform(country_map, 4326)
+#pal = colorNumeric(palette = "YlOrRd", domain = country_map$mean_mg)
+
+labels_c <- lapply(seq_len(nrow(country_map)), function(i) {
+  HTML(paste0(
+    "Country: ", country_map$country_final[i], "<br/>",
+    "Average Magnitude: ", round(country_map$mean_mg[i],2), "<br/>"
+  ))
+})
+
+
+labels <- lapply(seq_len(nrow(id_df)), function(i) {
+  HTML(paste0(
+    "<strong>", id_df$id[i], "</strong><br/>",
+    "Country: ", id_df$country_final[i], "<br/>",
+    "Magnitude: ", id_df$magnitude[i], "<br/>",
+    "Scale: ", id_df$richter_scale[i], "<br/>",
+    "Horizontal distance: ", id_df$horizontaldistance[i], "<br/>",
+    "Depth: ", id_df$depth[i], "<br/>"
+  ))
+})
+
+leaflet() %>%
+  addTiles() %>%
+  addPolygons(
+    data = country_map,
+    fillColor = ~pal(mean_mg),
+    weight = 1,
+    color = "white",
+    fillOpacity = 0.7,
+    group = "Countries",
+    label = labels_c
+  ) %>%
+  
+  addCircleMarkers(
+    data = id_df,
+    radius = ~magnitude,
+    stroke = TRUE,                     
+    weight = 1.5,                     
+    fillOpacity = 0.6,
+    fillColor = ~pal(magnitude),       
+    color = ~darken(pal(magnitude), 0.8), 
+    group = "Earthquakes",
+    label = labels
+  ) %>%
+  addLegend(
+    pal = pal,
+    values = country_map$mean_mg,
+    title = "Magnitude",
+    position = "bottomright"
+  ) %>%
+  setView(lng =18.2812 , lat = 9.1021, zoom = 2) %>% 
+  
+  addLayersControl(
+    overlayGroups = c("Countries", "Earthquakes"),
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+
 
 

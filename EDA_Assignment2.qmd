@@ -30,6 +30,7 @@ bibliography: references.bib
 # install.packages("htmlwidgets")
 
 #install.packages('float')
+# install.packages("rworldmap")
 library(lubridate)
 library(dplyr)
 library(ggplot2)
@@ -56,6 +57,7 @@ library(tibble)
 library(GGally)
 library(float)
 library(htmltools)
+library(rworldmap)
 ```
 
 # Data Wrangling Steps
@@ -74,7 +76,7 @@ library(htmltools)
 
 7.  Replace in NA values of the common columns with values from the corresponding column in the columns from the query dataframe.
 
-8.  Create richter_scale column using the category definition from [@usgs_magnitude]. According to the USGS website the magnitude types give the same magnitudes for earthquakes with magnitudes ranging from 6.5 to 7.0. In the combined eartquake dataframe, earthqakes there are 817 eaerthquake ids that exceed 7, accounting for \~2% of the data. As such, the magnitudes scale categories are defined solely based off the nominal values of the magnitude values themselves.
+8.  Create richter_scale column using the category definition from [@usgs_magnitude]. According to the USGS website the magnitude types give the same magnitudes for earthquakes with magnitudes ranging from 6.5 to 7.0. In the combined earthquake dataframe, earthquakes there are 817 earthquake ids that exceed 7, accounting for \~2% of the data. As such, the magnitudes scale categories are defined solely based off the nominal values of the magnitude values themselves.
 
 ```{r,read_data,echo=FALSE,eval=TRUE}
 
@@ -553,10 +555,11 @@ p1=df_earthquake %>% select(id,date_final,magnitude) %>%
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
   arrange(year_) %>% 
    mutate(running_avg = rollmean(nr_eq, k =3, fill = NA, align = "right")) %>% 
-  ggplot(aes(x=year_,y=nr_eq,fill='blue'))+
+  ggplot(aes(x=year_,y=nr_eq,fill=avg_mg))+
   geom_col(stat = 'identity')+
-  labs(title = "Number of Earthquakes per year",y='count',
-       x= "year") +
+  scale_fill_gradient(low = "yellow", high = "red")+
+  labs(title = "Number of Earthquakes per year",y='#occurances',
+       x= "year",fill='avg magnitude') +
   theme_minimal()
 
 
@@ -625,8 +628,8 @@ p6=df_earthquake %>% select(id,date_final,magnitude) %>%
   summarize(nr_eq=n_distinct(id),avg_mg=mean(magnitude)) %>% 
   arrange(year_) %>% 
    mutate(running_avg = rollmean(nr_eq, k =3, fill = NA, align = "right")) %>% 
-  ggplot(aes(x=year_,y=nr_eq,fill='blue'))+
-  geom_col(stat = 'identity')+
+  ggplot(aes(x=year_,y=nr_eq))+
+  geom_col(stat = 'identity',fill='blue')+
   labs(title = "Number of Earthquakes per year",y='count',
        x= "year") +
   theme_minimal()
@@ -711,7 +714,7 @@ Since 2016, the number of recorded earthquakes has sharply increased, peaking in
 
 ```
 
-Yearly average recorded magnitudes were mostly stable, averaging \~5.8 from 1973 to 2015, but saw a \~10% fall from 2015 to 2018 whilst earthqauke average depths have shown a declining trend from 2002
+Yearly average recorded magnitudes were mostly stable, averaging \~5.8 from 1973 to 2015, but saw a \~10% fall from 2015 to 2018 whilst earthquake average depths have shown a declining trend from 2002
 
 ```{r,hr_day,eval=TRUE, echo=FALSE}
 
@@ -849,9 +852,13 @@ sdf_earthquake=st_join(st_transform(sdf_earthquake, 3857),st_transform(wc, 3857)
   mutate(country_final= coalesce(country_fill,location_fill)) %>% 
   mutate(country_final=coalesce(country_final,'Unknown')) 
   
+data("countryRegions")
+coutry_cont=countryRegions %>% rename(country_final=ADMIN,region=REGION)
+sdf_earthquake=left_join(sdf_earthquake,coutry_cont,by=('country_final'))
   
 sdf_earthquake=st_transform(sdf_earthquake, crs=4326)
-#st_write(sdf_earthquake, "sdf_earthquake.gpkg")
+#st_write(sdf_earthquake, "sdf_earthquake.gpkg",append=FALSE)
+
 
 ```
 
@@ -999,26 +1006,58 @@ cp=leaflet(plot_df) %>%
 
 all_countries <- list_countries() 
 
-p2=sdf_earthquake %>% mutate(country=case_when(
-  location %in% all_countries ~location)) %>% filter( !is.na(country)) %>%
-  distinct(id,country,magnitude) %>%
+
+
+p2=sdf_earthquake %>% 
+  distinct(id,country_final,magnitude) %>%
+  rename(country=country_final) %>% 
    group_by(country) %>%
   summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
   arrange(desc(eq_count)) %>%
   head(20) %>%
   ggplot(aes(x=reorder(country,-eq_count),y=eq_count,fill=avg_magnitude))+
   geom_col(stat = 'identity')+
-  labs(title = "Top 20 Countries By Earthquke Count ",y='Count',
-       x= "Country") +
+  labs(title = "Top 20 Countries By Total Number of Earthquke Occurances (1965-2023) ",y='#occurances',
+       x= "Country",fill='mean magnitude') +
   scale_fill_gradient(low = "yellow", high = "red")+
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
 
-# 
-
-p2
 
 
+
+p2 
+```
+
+```{r,echo=F,eval=T}
+#| message: false
+#| warning: false
+#| fig-height: 5
+#| fig-width: 6
+#| paged-print: false
+#| label: fig-barplots8
+#| fig-cap: "12 month average earthquake occurance per country, Colored By Average Magnitude"
+#| 
+country_eq=sdf_earthquake %>% st_drop_geometry() %>%
+  mutate(year_=year(date_final)) %>% 
+  group_by(country_final,year_,date_final) %>% 
+  summarise(nr_eq=n_distinct(id),mean_mag=mean(magnitude))
+
+p2_1=country_eq %>% group_by(country_final,year_) %>% 
+  summarize(nr_eq_year=sum(nr_eq),mean_mag=mean(mean_mag)) %>% 
+  group_by(country_final) %>% 
+  summarise(mean_eq=mean(nr_eq_year),mean_mag=mean(mean_mag)) %>% 
+  arrange(desc(mean_eq)) %>% head(20) %>% 
+  ggplot(aes(x=reorder(country_final,-mean_eq),y=mean_eq,fill=mean_mag))+
+  geom_col()+
+   scale_fill_gradient(low = "yellow", high = "red")+
+    labs(title = "Top 20 12 Month Average Earthquake Occurances Per Country ",
+         x='country',y= "mean #occurances",fill = "mean magnitude")+
+  theme_minimal()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+  
+
+p2_1
 ```
 
 Indonesia has the highest number of recorded earthquakes, whilst the highest average magnitudes are observed for Figi and Ecuador. When split by scale, Indonesia still shows the highest number of occurrences across both Strong and Moderate earthquake types.
@@ -1061,26 +1100,69 @@ p3
 
 ```{r,bubble,eval=T, echo=FALSE}
 
+#| message: false
+#| warning: false
+#| fig-height: 8
+#| fig-width: 6
+#| paged-print: false
+#| fig-cap: "Earthqake Mean Magnitude vs Number of Seismic Stations (nst) grouped by Country -excluding Unknown"
+
+
 # Also look into earthqake frequency,number of earthquakes in unit span of time per countrt
 # Which countries experiance more eqs than others?- potential hotspots
 
 
+# Scatter of avg eq magnitude and number of seismic stations- facetted by the 
+# Use top 5 countries with the biggest number of occurances
 
-country_counts=sdf_earthquake %>% filter(!is.na(nst)) %>% 
-group_by(country_final) %>% summarize(nr_occurances=n_distinct(id), mean_mg=mean(magnitude),mean_nst=mean(nst,rm.na=T), mean_hs=mean(horizontaldistance,rm.na=T))
 
-min_val=min(country_counts$nr_occurances)
 
-max_val=max(country_counts$nr_occurances)
+top_5_country=country_eq %>% group_by(country_final,year_) %>% 
+  summarize(nr_eq_year=sum(nr_eq),mean_mag=mean(mean_mag)) %>% 
+  group_by(country_final) %>% 
+  summarise(mean_eq=mean(nr_eq_year),mean_mag=mean(mean_mag)) %>% 
+filter(country_final!='Unknown') %>% 
+  arrange(desc(mean_eq)) %>% 
+  head(5) %>%
+  pull(country_final)
 
-country_counts %>%
-  ggplot(aes(x = mean_nst, y =mean_mg, size = nr_occurances)) +
-  geom_point(alpha = 0.5) +  # Alpha adds transparency to handle overlapping
-  scale_size(range = c(1,10))+
-    labs(title = "Avg Magnitude vs Avg Number of Siesmic Stations (NST)  ",y='mean magnitude',x= "NST")+
+
+bb=sdf_earthquake %>% group_by(country_final) %>%
+  mutate(country_occ_sum = n_distinct(id)) %>%
+  ungroup() %>% filter(country_final %in% top_5_country) %>% 
+    mutate(
+    country_final = reorder(country_final, -country_occ_sum)  
+  ) %>% 
+  ggplot(aes(x = nst, y =magnitude, size = country_occ_sum,color=country_final)) +
+  geom_point(alpha = 0.5) +  
+  scale_size(range = c(1,5))+
+    labs(title = "Avg Magnitude vs Avg Number of Siesmic Stations (NST)  ",y='magnitude',x= "NST",
+         color='top 5 countries',size='')+
   theme_minimal()
 
+ggplotly(bb)
+```
 
+```{r,echo=FALSE,eval=TRUE}
+#| message: false
+#| warning: false
+
+
+
+bc=sdf_earthquake %>% group_by(continent) %>%filter(!is.na(continent)) %>% 
+  mutate(cont_occ_sum = n_distinct(id)) %>%
+  ungroup() %>%  
+    mutate(
+    country_final = reorder(continent, -cont_occ_sum)  
+  ) %>% 
+  ggplot(aes(x = nst, y =magnitude, size = cont_occ_sum,color=continent)) +
+  geom_point(alpha = 0.5) +  
+  scale_size(range = c(1,5))+
+    labs(title = "Avg Magnitude vs Avg Number of Siesmic Stations (NST)  ",y='magnitude',x= "NST",
+         color='continent',size='')+
+  theme_minimal()
+
+ggplotly(bc)
 
 ```
 
@@ -1115,8 +1197,9 @@ plot(raster_result)
 nrow(indo)
 
 # look into contour plots for eq magnitude, deoth and horzontal distance and other vars!!!!!
+
 ```
 
 ## References {.appendix}
 
-![Global Earthquake Occurrences (1965-2024)](eq_global_distribution.png)
+![Global Earthquake Occurrences (1965-2024)](eq_global_distribution.png){width="762"}
