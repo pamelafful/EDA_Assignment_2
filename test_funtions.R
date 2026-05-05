@@ -2,6 +2,11 @@
 sdf_eq=st_read('sdf_earthquake.gpkg')
 sdf_eq_countries=st_read('country_geometries.gpkg') %>% rename(geometry=geom)
 
+sdf_eq <- readRDS("sdf_eq.rds")
+sdf_eq_countries <- readRDS("sdf_eq_countries.rds")
+
+names(sdf_eq_countries)
+
 country_geom=sdf_eq_countries %>% group_by(country_final) %>% summarize()
 
 ids=sdf_eq %>% select(id,date_final,magnitude,country_final) %>% st_drop_geometry()
@@ -14,7 +19,18 @@ world_countries <- ne_countries(scale = "medium", returnclass = "sf")
 wc=world_countries %>% select(name,geometry) %>% rename(country_=name)
 
 library(lubridate)
+
+start = min(floor_date(sdf_eq$date_final,unit='month'))
+end = max(floor_date(sdf_eq$date_final,unit='month'))
+min = min(month(sdf_eq$date_final))
+max = max(month(sdf_eq$date_final))
 sdf_eq %>% mutate(yr=floor_date(date_final,unit='month')) %>% pull(yr)
+
+country_options=sdf_eq %>% distinct(country_final) %>% pull()
+scale_options=sdf_eq %>% distinct(richter_scale) %>% pull()
+continent_options=sdf_eq %>% distinct(continent) %>% pull()
+input=list(Year=c(start ,end),Country_Filter=country_options, Scale_Filter=scale_options,Continent_Filter=continent_options)
+
 
 
 country_map=id_country_geom %>% 
@@ -171,10 +187,7 @@ ggplot(df, aes(x, y, z = z)) +
 
 
 
-start = min(floor_date(sdf_eq$date_final,unit='month'))
-end = max(floor_date(sdf_eq$date_final,unit='month'))
-min = min(month(sdf_eq$date_final))
-max = max(month(sdf_eq$date_final))
+
 
 input.Year=c(start ,end)
 
@@ -323,4 +336,75 @@ leaflet() %>%
 
 
 
+ids_df <- sdf_eq %>% mutate(date_month=floor_date(date_final,unit='month'),year_=year(date_final)) %>% 
+  select(id, date_final, date_month, year_, magnitude, country_final, 
+         continent, richter_scale, location, horizontaldistance, depth,nst) %>% 
+  st_drop_geometry()
 
+sdf_eq_spatial <- sdf_eq %>%
+  select(id, magnitude, geom)
+
+filtered_data=ids_df %>%
+  filter(
+    date_month >= input$Year[1],
+    date_month <= input$Year[2],
+    country_final %in% input$Country_Filter,
+    richter_scale %in% input$Scale_Filter
+  )
+
+
+filtered_ids <- filtered_data %>% distinct(id)
+id_spatial <- sdf_eq_spatial %>%
+  filter(id %in% filtered_ids$id)
+
+ids_df %>%
+  filter(
+    date_month >= input$Year[1],
+    date_month <= input$Year[2],
+    country_final %in% input$Country_Filter,
+    richter_scale %in% input$Scale_Filter
+  ) %>%
+  inner_join(st_drop_geometry(id_spatial), by = c("magnitude","id")) %>% 
+  select(id, country_final, magnitude, location, richter_scale, 
+         horizontaldistance, depth) %>%
+  inner_join(id_spatial, by = c("id", "magnitude"))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+sdf_eq %>%mutate(
+  date_month = floor_date(date_final, unit = "month"),
+  year_ = year(date_final)
+) %>% 
+  filter(
+    date_month >= input$Year[1],
+    date_month <= input$Year[2],
+    country_final %in% input$Country_Filter,
+    richter_scale %in% input$Scale_Filter) %>% 
+  st_drop_geometry() %>%
+  group_by(country_final) %>%
+  summarize(
+    mean_mg = mean(magnitude, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  inner_join(country_geom, by = "country_final") %>%
+  st_as_sf()
+
+
+country_geom=sdf_eq_countries %>% group_by(country_final) %>% summarize()
+
+ids=sdf_eq %>% select(id,date_final,magnitude,country_final,continent) %>% st_drop_geometry()
+id_country_geom=st_as_sf(inner_join(ids,country_geom, by=('country_final')))
