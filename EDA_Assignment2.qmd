@@ -4,6 +4,7 @@ author: ""
 editor: visual
 format:
   pdf:
+    pdf-engine: lualatex
     fig-pos: 'H'
 documentclass: article
 include-in-header:
@@ -97,14 +98,14 @@ library(kableExtra)
 
 # Introduction
 
-This report analyses earthquake data from 1965 to 2023. The data is sourced from the official USGS website and tracks global earthquake occurrences along with their key attributes, including magnitudes (measured using various magnitude types), horizontal distances, depths, approximate locations, and key measurement statistics. \
+This report analyses earthquake data from 1965 to 2023. The data is sourced from the official USGS website and tracks global earthquake occurrences along with their key attributes, including magnitudes (measured using various magnitude types), horizontal distances, depths, approximate locations, and key measurement statistics.\
 Although the time span of the data is quite extensive, the dataset is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the dataset, two key features have been added. The first is the "Scale" feature, which categorises earthquake types into magnitude buckets using definitions from the Richter Scale(reference needed). The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilising Named Entity Recognition from the Spacy package to extract labelled country data directly from the dataset. Exploratory insights are divided into three parts:
 
 1.  General Data Analysis: This examines key feature relationships and correlations, primarily factored by the Scale feature.
 
 2.  Temporal Analysis: This focuses on trends in earthquake occurrences over time.
 
-3.   Spatial Analysis: This analyses important earthquake features from both country and regional perspectives.
+3.  Spatial Analysis: This analyses important earthquake features from both country and regional perspectives.
 
 # Data Wrangling Steps
 
@@ -398,22 +399,19 @@ variable_summ=left_join(variable_summ,col_types,by='feature')
 variable_summ=variable_summ %>% filter(!feature %in% c('latitude','longitude','latitude_query','longitude_query','depth_query','mag','deptherror_query','horizontal_error_query','magnst','magerror'))
 
 
-dt_summ=kable(na.omit(variable_summ), caption = 'Cleaned Earthquake Dataset Numeric Features Data Summary', format = "latex", booktabs = TRUE) %>%
-  kable_styling(latex_options = c("hold_position"))
-
 
 ```
-
-![](images/clipboard-1787642721.png){fig-align="left" width="637" height="322"}
 
 # General Data Analysis
 
 #### Earthquake Counts and Magnitude Distributions
 
-```{r,df_attr,eval=TRUE,echo=FALSE}
+```{r,df_attr,eval=T,echo=FALSE}
 
-# comeback and find a tidyier way of showing this
-#names(skim(df_earthquake))
+kable(na.omit(variable_summ), caption = 'Cleaned Earthquake Dataset Numeric Features Data Summary', format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position","scale_down"))
+
+
 
 
 ```
@@ -497,7 +495,7 @@ p3_cont=df_earthquake %>%
 p2/p3_cont
 ```
 
-In total, there have been \~34.1K recorded unique instances of earthquakes from 1965 to 2023, with the majority of these being Moderate earthquakes (magnitudes between 5.0 and 5.99), accounting for \~76% of recorded occurrences. \
+In total, there have been \~34.1K recorded unique instances of earthquakes from 1965 to 2023, with the majority of these being Moderate earthquakes (magnitudes between 5.0 and 5.99), accounting for \~76% of recorded occurrences.\
 Earthquake are mostly distributed above/ to the right of the median earthquake magnitudes (5.6,moderate); \~60% of occurrences were above the median, whilst \~30% of ids lie above the 75th percentile (5.9) of magnitudes. Only 2% of recorded earthquakes had a magnitude greater than 7.
 
 ```{r,counts,eval=F,echo=F}
@@ -532,8 +530,6 @@ sk=df_earthquake %>% distinct(id,magnitude) %>%
          ) %>% summarize(total_gr=sum(gr_med),count_total=length(gr_med)) %>% 
   mutate(percentage=(total_gr/count_total)*100) %>% 
   rename(`greater than median`=total_gr,`total nr ids`=count_total)
-
-kable(sk, caption = "earthquake magnitude distribution count")
 ```
 
 ### Feature Correlations
@@ -652,7 +648,7 @@ p1/p2
 
 Major earthquake types record the highest average depth across magnitude scales, although the distribution of depth across these scales do not show an immediate significant difference.
 
-```{r dist_mag, eval=F, echo=FALSE}
+```{r dist_mag, eval=T, echo=FALSE}
 
 #| message: false
 #| warning: false
@@ -684,11 +680,17 @@ p2=df_earthquake %>% select(horizontaldistance,richter_scale) %>% filter( !is.na
   labs(title = "Average Horizontal Distance Per Scale Category",
        y = "avg h.distance", x='scale') +
   theme_minimal()
-
-p1/p2
+p2
 ```
 
-The average horizontal distance is highest for moderate earthquake types - although there are a LOT of null values for this feature so...\* There is also no significant difference in the distributions of this features across scale categories.\
+\~ 95% (\~32.5K) of IDs have missing values for horizontal depth. Of there remaining 5% ( .5K), the average horizontal distance is highest for moderate earthquake types at 4.33 followed by strong earthquakes at 3.38m\
+
+```{r,na_cnt,eval=F,echo=F}
+
+(df_earthquake %>% select(horizontaldistance,richter_scale,id) %>% filter( !is.na(horizontaldistance) ) %>% 
+  summarize(cnt=n_distinct(id)) %>% pull(cnt))/(df_earthquake %>% select(horizontaldistance,richter_scale,id) %>%  
+  summarize(cnt=n_distinct(id)) %>% pull(cnt))
+```
 
 # Temporal Data Analysis
 
@@ -716,6 +718,22 @@ p1=df_earthquake %>% select(id,date_final,magnitude) %>%
   labs(title = "Number of Earthquakes per year",y='#occurances',
        x= "year",fill='avg magnitude') +
   theme_minimal()
+
+
+p1_1=df_earthquake %>% select(id,date_final,richter_scale) %>% 
+  mutate(year_=year(date_final), trunc_date=floor_date(df_earthquake$date_final,unit='month')) %>% 
+  group_by(year_,richter_scale,trunc_date) %>% 
+  summarize(nr_eq=n_distinct(id)) %>% # totals per date
+  group_by(year_,richter_scale)%>% 
+  summarize(mean_occ=mean(nr_eq))%>% 
+  ggplot(aes(x=year_,y=mean_occ,fill=richter_scale))+
+  geom_col(stat = 'identity',position = "dodge")+
+  labs(title = "Yearly avg number of occurances per catergory",y='avg #occurances',
+       x= "year",fill='scale') +
+  theme_minimal()
+
+
+
 
 
   
@@ -791,7 +809,7 @@ p6=df_earthquake %>% select(id,date_final,magnitude) %>%
 
 
  
-(p1/p5)
+(p1+p1_1)/p5
  
 #ggplotly(p1)
 
