@@ -22,3 +22,8 @@ htmlwidgets
 terra
 tibble
 GGally
+float
+htmltools
+sp
+rworldmap
+kableExtra

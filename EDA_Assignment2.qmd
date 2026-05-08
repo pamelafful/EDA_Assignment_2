@@ -1,19 +1,53 @@
 ---
-title: "EDA Assignmemnt 2"
-author: "Pamela Afful"
-format: 
+title: ""
+author: ""
+editor: visual
+format:
   pdf:
     fig-pos: 'H'
-editor: visual
+documentclass: article
+include-in-header:
+  text: |
+    \usepackage{graphicx}
 
+include-before-body:
+  text: |
+    \begin{titlepage}
+    \centering
+
+    {\Large University of Cape Town\par}
+    \vspace{0.8cm}
+
+    \includegraphics[width=0.35\textwidth]{CopyOfUCTLogo.jpg}
+
+    \vspace{2cm}
+
+    {\Large EDA Assignment 2\par}
+    
+    \vspace{0.5cm}
+    
+    {\Large Earthquake Analysis \par}
+
+    \vspace{1.5cm}
+
+    {\large Pamela Afful\par}
+
+    \vspace{0.5cm}
+
+    {\large Student Number: AFFPAM001\par}
+
+    \vfill
+
+    {\large \today\par}
+
+    \end{titlepage}
+    
 execute: 
-  cache: false
+  cache: true
   warning: false
   message: false
   echo: false
-  
-
-
+  enabled: true
   
 bibliography: references.bib
 ---
@@ -40,7 +74,7 @@ library(zoo)
 library(plotly)
 library(spacyr)
 library(sf)
-spacy_initialize(model = "en_core_web_sm")
+#spacy_initialize(model = "en_core_web_sm")
 library(stringr)
 library(tidyr)
 library(countries)
@@ -58,7 +92,19 @@ library(GGally)
 library(float)
 library(htmltools)
 library(rworldmap)
+library(kableExtra)
 ```
+
+# Introduction
+
+This report analyses earthquake data from 1965 to 2023. The data is sourced from the official USGS website and tracks global earthquake occurrences along with their key attributes, including magnitudes (measured using various magnitude types), horizontal distances, depths, approximate locations, and key measurement statistics. \
+Although the time span of the data is quite extensive, the dataset is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the dataset, two key features have been added. The first is the "Scale" feature, which categorises earthquake types into magnitude buckets using definitions from the Richter Scale(reference needed). The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilising Named Entity Recognition from the Spacy package to extract labelled country data directly from the dataset. Exploratory insights are divided into three parts:
+
+1.  General Data Analysis: This examines key feature relationships and correlations, primarily factored by the Scale feature.
+
+2.  Temporal Analysis: This focuses on trends in earthquake occurrences over time.
+
+3.   Spatial Analysis: This analyses important earthquake features from both country and regional perspectives.
 
 # Data Wrangling Steps
 
@@ -267,6 +313,99 @@ kable(df_att, caption = "earthquake dataset summary")
 
 ```
 
+```{r,var_summ,echo=F,eval=T}
+
+col_types = sapply(df_earthquake, class)
+
+col_types_df = data.frame(column = names(col_types), datatype = as.character(col_types))
+
+col=c('column','na_count')
+na_cnt=data.frame(colSums(is.na(df_earthquake))) %>%
+  rownames_to_column("old_index") %>% 
+  rename_with(~ col)
+
+
+col_types=left_join(col_types_df,na_cnt,by='column') %>% rename(feature='column')
+
+feat_mins=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    min(x, na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+feat_q1=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    quantile(x, probs = 0.25, na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+feat_mean=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    mean(x,na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+feat_median=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    quantile(x, probs = 0.5, na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+feat_q75=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    quantile(x, probs = 0.75, na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+feat_max=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    max(x,na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+feat_var=sapply(df_earthquake, function(x) {
+  if (is.numeric(x)) {
+    var(x, na.rm = TRUE)
+  } else {
+    NA
+  }
+})
+
+
+variable_summ=data.frame(feature=names(df_earthquake), 
+                         `min`=unname(feat_mins),
+                         q25=unname(feat_q1),
+                         `mean`=unname(feat_mean),
+                         `meadian`=unname(feat_median),
+                         q75=unname(feat_q75),
+                          `max`=unname(feat_max),
+                         `sd`=round(unname(feat_var),2)**0.5
+                         )
+
+variable_summ=left_join(variable_summ,col_types,by='feature')
+variable_summ=variable_summ %>% filter(!feature %in% c('latitude','longitude','latitude_query','longitude_query','depth_query','mag','deptherror_query','horizontal_error_query','magnst','magerror'))
+
+
+dt_summ=kable(na.omit(variable_summ), caption = 'Cleaned Earthquake Dataset Numeric Features Data Summary', format = "latex", booktabs = TRUE) %>%
+  kable_styling(latex_options = c("hold_position"))
+
+
+```
+
+![](images/clipboard-1787642721.png){fig-align="left" width="637" height="322"}
+
 # General Data Analysis
 
 #### Earthquake Counts and Magnitude Distributions
@@ -303,18 +442,35 @@ phist=df_earthquake %>%
        y = "magnitude") +
   theme_minimal()
 
-p2/phist
+
+
+```
+
+```{r,dist_counts,eval=FALSE,echo=F}
+gr_med_mag=df_earthquake %>% filter(magnitude>=median(df_earthquake$magnitude)) %>% summarize(n_distinct(id)) %>% pull()
 
 gr_7_cnt=df_earthquake %>% filter(magnitude>=7) %>% 
   summarize(n_distinct(id)) %>% pull()
 
+
+gr_med_mag/(df_earthquake  %>% 
+  summarize(n_distinct(id)) %>% pull())
+
+
+gr_75_mag=df_earthquake %>% filter(magnitude>=quantile(df_earthquake$magnitude,0.75)) %>% summarize(n_distinct(id)) %>% pull()
+
+gr_75_mag/(df_earthquake  %>% 
+  summarize(n_distinct(id)) %>% pull())
+
+gr_7_cnt/(df_earthquake  %>% 
+  summarize(n_distinct(id)) %>% pull())
 ```
 
 ```{r,mg_summ,echo=F,eval=T}
 
 #| message: false
 #| warning: false
-#| fig-height: 5
+#| fig-height: 7
 #| fig-width: 10
 #| paged-print: false
 #| label: fig-barplot1
@@ -323,7 +479,7 @@ gr_7_cnt=df_earthquake %>% filter(magnitude>=7) %>%
 # Magnitude summary Statistics
 
 # Total number of inidividual eq
-df_earthquake %>%  
+p3_cont=df_earthquake %>%  
   distinct(id,richter_scale) %>% 
   mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
   group_by(richter_scale) %>% 
@@ -335,15 +491,16 @@ df_earthquake %>%
   geom_text(aes(label = label), vjust = -0.5) +
   labs(title = "Counts of Earthquakes Per Scale Category",
        x = "scale",y='count')+
-  scale_y_continuous(limits = c(0, 30000))+
+  scale_y_continuous(limits = c(0, 31000))+
   theme_minimal()
   
-
+p2/p3_cont
 ```
 
-In total, there have been \~34.1K recorded unique instances of earthquakes from 1965 to 2013. By category, Moderate category earthquakes dominate accounting for \~76% of recorded IDs.
+In total, there have been \~34.1K recorded unique instances of earthquakes from 1965 to 2023, with the majority of these being Moderate earthquakes (magnitudes between 5.0 and 5.99), accounting for \~76% of recorded occurrences. \
+Earthquake are mostly distributed above/ to the right of the median earthquake magnitudes (5.6,moderate); \~60% of occurrences were above the median, whilst \~30% of ids lie above the 75th percentile (5.9) of magnitudes. Only 2% of recorded earthquakes had a magnitude greater than 7.
 
-```{r,counts,eval=TRUE,echo=F}
+```{r,counts,eval=F,echo=F}
 
 #| message: false
 #| warning: false
@@ -363,8 +520,6 @@ kable(summ_tab, caption = "earthquake magnitude summary")
 
 
 ```
-
-Earthquake are mostly distributed above/ to the right of the median earthquake magnitudes (5.6 lying on th moderate scale); \~60% of ids equal or lie above the median earthquake magnitude
 
 ```{r,num_dist_cnt,eval=F,echo=F}
 # Distribution of p2
