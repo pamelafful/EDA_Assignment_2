@@ -79,14 +79,6 @@ ui = dashboardPage(
       startview = "year"
     ),
     
-    # selectInput(
-    #   inputId = "Country_Filter",
-    #   label = "Choose Country:",
-    #   choices = country_options,
-    #   multiple = TRUE,
-    #   selected = country_options
-    # ),
-    
     pickerInput(
       "Country_Filter",
       "Choose Country:",
@@ -125,21 +117,6 @@ ui = dashboardPage(
       )
     )
     
-    # selectInput(
-    #   inputId = "Continent_Filter",
-    #   label = "Choose Region:",
-    #   choices = continent_options,
-    #   multiple = TRUE,
-    #   selected = continent_options
-    # ),
-    
-    # selectInput(
-    #   inputId = "Scale_Filter",
-    #   label = "Choose Magnitude Scale:",
-    #   choices = scale_options,
-    #   multiple = TRUE,
-    #   selected = continent_options
-    # )
     
   ),
   dashboardBody(
@@ -188,6 +165,25 @@ server = function(input, output, session) {
         )
     }) %>% debounce(300)
     
+    # filter for eq_stats visuals
+    ind_filtered_data <- reactive({
+      req(input$Country_Filter, input$Scale_Filter, input$Continent_Filter)
+      
+        sdf_eq %>% mutate(year_= year(date_final)) %>% 
+        filter(richter_scale %in% input$Scale_Filter & 
+                 country_final %in% input$Country_Filter &
+                 continent %in% input$Continent_Filter)
+    }) %>% debounce(300)
+    
+ 
+    bb_filtered_data <- reactive({
+      req(input$Scale_Filter, input$Year)
+      
+      sdf_eq %>% mutate(year_= year(date_final)) %>% 
+        filter(richter_scale %in% input$Scale_Filter,
+               date_month >= input$Year[1],
+               date_month <= input$Year[2])
+    }) %>% debounce(300)  
     
     # -------------------------------
     # 2. COUNTRY-LEVEL SUMMARY
@@ -298,62 +294,62 @@ server = function(input, output, session) {
     # -------------------------------
     # 5. EARTHQUAKES PER YEAR
     # -------------------------------
-    # output$eq_pr_yr <- renderPlotly({
-    #   df <- filtered_data()
-    #   req(nrow(df) > 0)
-    #   
-    #   plot_df <- df %>%
-    #     group_by(year_, country_final) %>%
-    #     summarize(
-    #       eq_cnt = n_distinct(id),
-    #       mean_mg = mean(magnitude),
-    #       .groups = "drop"
-    #     )
-    #   
-    #   fig=ggplot(plot_df, aes(x = year_, y = eq_cnt, fill = mean_mg)) +
-    #     geom_col() +
-    #     scale_fill_gradient(low = "yellow", high = "red") +
-    #     labs(
-    #       title = "Number of Earthquakes per Year",
-    #       y = "# Occurrences",
-    #       x = "Year",
-    #       fill = "Avg Magnitude"
-    #     ) +
-    #     theme_minimal() 
-    #     ggplotly(fig)
-    # })
+    output$eq_pr_yr <- renderPlotly({
+      df <- ind_filtered_data() #filtered_data() 
+      req(nrow(df) > 0)
+
+      plot_df <- df %>%
+        group_by(year_) %>%
+        summarize(
+          eq_cnt = n_distinct(id),
+          mean_mg = mean(magnitude),
+          .groups = "drop"
+        )
+
+      fig=ggplot(plot_df, aes(x = year_, y = eq_cnt, fill = mean_mg)) +
+        geom_col() +
+        scale_fill_gradient(low = "yellow", high = "red") +
+        labs(
+          title = "Number of Earthquakes per Year",
+          y = "# Occurrences",
+          x = "Year",
+          fill = "Avg Magnitude"
+        ) +
+        theme_minimal()
+        ggplotly(fig)
+    })
     
     
     # -------------------------------
     # 6. CONTINENT BUBBLE PLOT
     # -------------------------------
-    # output$con_bb_plot <- renderPlotly({
-    #   df <- filtered_data()
-    #   req(nrow(df) > 0)
-    #   
-    #   plot_df <- df %>%
-    #     filter(!is.na(continent)) %>%
-    #     group_by(continent) %>%
-    #     mutate(cont_occ_sum = n_distinct(id)) %>%
-    #     ungroup()
-    #   
-    #   fig=ggplot(plot_df,
-    #          aes(x = nst, y = magnitude,
-    #              size = cont_occ_sum,
-    #              color = continent)) +
-    #     geom_point(alpha = 0.5) +
-    #     scale_size(range = c(1, 5)) +
-    #     labs(
-    #       title = "Magnitude vs Seismic Stations (NST)",
-    #       y = "Magnitude",
-    #       x = "NST",
-    #       color = "Continent",
-    #       size = ""
-    #     ) +
-    #     theme_minimal() 
-    #     
-    #   ggplotly(fig)
-    # })
+    output$con_bb_plot <- renderPlotly({
+      df <- bb_filtered_data()
+      req(nrow(df) > 0)
+
+      plot_df <- df %>%
+        filter(!is.na(continent)) %>%
+        group_by(continent) %>%
+        mutate(cont_occ_sum = n_distinct(id)) %>%
+        ungroup()
+
+      fig=ggplot(plot_df,
+             aes(x = nst, y = magnitude,
+                 size = cont_occ_sum,
+                 color = continent)) +
+        geom_point(alpha = 0.5) +
+        scale_size(range = c(1, 5)) +
+        labs(
+          title = "Magnitude vs Seismic Stations (NST)",
+          y = "Magnitude",
+          x = "NST",
+          color = "Continent",
+          size = ""
+        ) +
+        theme_minimal()
+
+      ggplotly(fig)
+    })
     
   }
 
