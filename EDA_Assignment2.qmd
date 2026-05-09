@@ -652,8 +652,8 @@ Major earthquake types record the highest average depth across magnitude scales,
 
 #| message: false
 #| warning: false
-#| fig-height: 6
-#| fig-width: 12
+#| fig-height: 4
+#| fig-width: 5
 #| paged-print: false
 #| label: fig-barplots3
 #| fig-cap: "Average Earthquake Horizontal Distance Per Scale Category"
