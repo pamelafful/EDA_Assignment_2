@@ -75,7 +75,7 @@ library(zoo)
 library(plotly)
 library(spacyr)
 library(sf)
-#spacy_initialize(model = "en_core_web_sm")
+spacy_initialize(model = "en_core_web_sm")
 library(stringr)
 library(tidyr)
 library(countries)
@@ -404,7 +404,7 @@ variable_summ=variable_summ %>% filter(!feature %in% c('latitude','longitude','l
 
 # General Data Analysis
 
-#### Earthquake Counts and Magnitude Distributions
+**Earthquake Counts and Magnitude Distributions**
 
 ```{r,df_attr,eval=T,echo=FALSE}
 
@@ -532,7 +532,7 @@ sk=df_earthquake %>% distinct(id,magnitude) %>%
   rename(`greater than median`=total_gr,`total nr ids`=count_total)
 ```
 
-### Feature Correlations
+**Feature Correlations**
 
 In absolute terms, the number of seismic stations, nst, shows the highest linear correlation with earthquake magnitude at 30%, followed by azimuthal gap at 24% (defined as the largest angle between two adjacent seismic stations measured from an earthquake's epicenter, @azimuthal_gap_researchgate).
 
@@ -581,11 +581,11 @@ geom_tile() +
 #| label: fig-scatterplot1
 #| fig-cap: "Feature Pairwise Plots"
 
-df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror,nst) %>% 
-  ggpairs(columns=1:10) +
+df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,horizontaldistance,horizontalerror,magnitudeseismicstations,magnitudeerror,nst,richter_scale) %>% 
+  ggpairs(columns=(1:10), aes(color=richter_scale)) +
   labs(title = "Feature Pairwise Plot")+
   theme_minimal()
-  # aes(color=richter_scale,
+  # ,
                          #       alpha=0.5))
 ```
 
@@ -605,7 +605,7 @@ Additionally, the error associated with the measured magnitude, referred to as m
 
 -   Number of magnitude seismic stations: negatively correlated at the 1% level of significance
 
-### Earthquake Depth and Horizontal Distance Per Scale Category
+**Earthquake Depth and Horizontal Distance Per Scale Category**
 
 ```{r,depth_mag,echo=FALSE,eval=T}
 
@@ -683,7 +683,7 @@ p2=df_earthquake %>% select(horizontaldistance,richter_scale) %>% filter( !is.na
 p2
 ```
 
-\~ 95% (\~32.5K) of IDs have missing values for horizontal depth. Of there remaining 5% ( .5K), the average horizontal distance is highest for moderate earthquake types at 4.33 followed by strong earthquakes at 3.38m\
+\~ 95% (\~32.5K) of IDs have missing values for horizontal depth. Of there remaining 5% ( \~1.5K), the average horizontal distance is highest for moderate earthquake types at 4.33 followed by strong earthquakes at 3.38m\
 
 ```{r,na_cnt,eval=F,echo=F}
 
@@ -694,13 +694,13 @@ p2
 
 # Temporal Data Analysis
 
-#### General Earthquake Ocuurances Pear Year
+#### General Earthquake Occurrences Pear Year
 
 ```{r eq_per_dt, eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
 #| fig-height: 5
-#| fig-width: 8
+#| fig-width: 10
 #| paged-print: false
 #| label: fig-barplots4
 #| fig-cap: "Earthqake occurances over time"
@@ -731,10 +731,6 @@ p1_1=df_earthquake %>% select(id,date_final,richter_scale) %>%
   labs(title = "Yearly avg number of occurances per catergory",y='avg #occurances',
        x= "year",fill='scale') +
   theme_minimal()
-
-
-
-
 
   
  p2=df_earthquake %>% select(id,date_final,magnitude) %>% 
@@ -818,7 +814,7 @@ p6=df_earthquake %>% select(id,date_final,magnitude) %>%
 ```{r,eq_sensitivity,eval=T,echo=F}
 #| message: false
 #| warning: false
-#| fig-height: 5
+#| fig-height: 3.8
 #| fig-width: 6
 #| paged-print: false
 #| label: fig-barplots49
@@ -832,6 +828,7 @@ nst_p=df_earthquake %>% distinct(id,date_final,nst) %>%
   summarize(nst_cnt=mean(nst,rm.na=T)) %>% 
   ggplot(aes(x=year_,y=nst_cnt))+
   geom_line()+
+  geom_point()+
   labs(title = "Yearly Avg Number of Seismic Stations (nst) Per ID",y='avg nst count',
        x = "year") +
   theme_minimal()
@@ -842,8 +839,12 @@ rms=df_earthquake %>% distinct(id,date_final,rootmeansquare) %>%
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
   summarize(nst_cnt=mean(rootmeansquare,rm.na=T)) %>% 
+  mutate(
+    pct_change = (nst_cnt - lag(nst_cnt)) / lag(nst_cnt) * 100,
+    moving_pct_change = rollmean(nst_cnt, k = 3, fill = NA, align = "right")) %>% 
   ggplot(aes(x=year_,y=nst_cnt))+
   geom_line()+
+  geom_point()+
   labs(title = "Yearly Avg Root Mean Sqaure Error Per ID",y='avg rms',
        x = "year") +
   theme_minimal()
@@ -856,17 +857,21 @@ mg_err=df_earthquake %>% distinct(id,date_final,magnitudeerror) %>%
   summarize(nst_cnt=mean(magnitudeerror,rm.na=T)) %>% 
   ggplot(aes(x=year_,y=nst_cnt))+
   geom_line()+
+  geom_point()+
   labs(title = "Yearly Avg Magnitude Error Per ID",y='avg magnitude error',
        x = "year") +
   theme_minimal()
 
 (nst_p/rms/mg_err)
 
-#ggplotly(nst_p)
 
 ```
 
-Since 2016, the number of recorded earthquakes has sharply increased, peaking in 2021 with 2,200 occurrences, representing a 135% increase from the previous year. This rise coincides with an increase in the average number of seismic stations, which has reached approximately 74 stations per year since 2020. Lower measurements of magnitude and root mean square error are also observed during this time, indicating improved earthquake detection and measurement sensitivity.
+Since 2017, the number of recorded earthquakes has sharply increased, peaking in 2021 with 2,200 occurrences, representing a 135% increase from the previous year- although the average recorded magnitudes showed relative decreases, with the average scale within the moderate scale. The sudden increase also occurs around the same period in which the average number of seismic stations per ID (occurrence) peaking at approximately 112 stations per earthquake ID in 2022; Lower magnitude errors[^1] and root mean square errors[^2] were also observed during this time, indicating improved earthquake detection and measurement sensitivity.
+
+[^1]: A statistical measure used to evaluate how well a model predicts earthquake magnitudes.
+
+[^2]: The uncertainty or difference in the measured earthquake magnitude.
 
 ```{r,mag_time, eval=TRUE, echo=FALSE}
 
@@ -889,7 +894,7 @@ Since 2016, the number of recorded earthquakes has sharply increased, peaking in
 
 Yearly average recorded magnitudes were mostly stable, averaging \~5.8 from 1973 to 2015, but saw a \~10% fall from 2015 to 2018 whilst earthquake average depths have shown a declining trend from 2002
 
-```{r,hr_day,eval=TRUE, echo=FALSE}
+```{r,hr_day,eval=F, echo=FALSE}
 
 #| message: false
 #| warning: false
@@ -934,6 +939,7 @@ p1/p2
 ```
 
 ```{r,temp_corr,eval=TRUE, echo=FALSE}
+library(ggridges)
 
 #| message: false
 #| warning: false
@@ -966,18 +972,20 @@ Overall, earthquake occurrences show relatively uniform distributions/counts tho
 
 Location/Country Extraction Method:
 
--   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column (where available) and save these extracted values in a dataframe/csv file named "location_entities." Then, join this data back to the \`df_earthquake\` DataFrame using the "id" key. After joining, convert the resulting dataframe into a spatial dataframe called \`sdf_earthquake\`.
--   Next, use the built-in **countries** spatial dataframe from the Rnaturalearth package, which contains a list of countries and their geometries. Perform a spatial join with \`sdf_earthquake\` using the **st_is_within_distance** predicate, which joins geometries that are within a specified distance of each other. In this case, apply a threshold of 50 kilometers, allowing country locations to be tagged to earthquake IDs that occurred within 50 kilometers of a country's geometry.
--   Finally, tag the location of any IDs that could not be extracted using the methods mentioned above as "Unknown."
+-   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column (where available) and save these extracted values in a dataframe/csv file named "location_entities." Then, join this data back to the \`df_earthquake\` dataFrame using the **ID** key. After joining, convert the resultant dataframe into a spatial dataframe.
+-   Next, use the built-in **countries** spatial dataframe from the rnaturalearth package, which contains a list of countries and their geometries. Perform a spatial join with \`sdf_earthquake\` using the **st_is_within_distance** predicate, which joins geometries that are within a specified distance of each other. In this case, apply a threshold of 100 kilometers, allowing country locations to be tagged to earthquake IDs that occurred within 100 kilometers of a country's geometry.
+-   Finally, tag the location of any IDs that could not be extracted using the aforementioned methods as "Unknown."
 
 ```{r,loc_ext_spcy,eval=F, echo=FALSE}
 # Extract eq locations from the place column using spacy
 # Store results in a csv
-# This code block takes a while so we use the results readiliy saved in a csv
+# This code block takes a while so we use the results readily saved in a csv
 
-location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
+eq_places=df_earthquake %>% filter(!is.na(place)) %>% select(id,place)  %>% mutate(doc_id=paste0('text',row_number())) %>% select(id,place,doc_id)
 
-write.csv(location_entities, "location_entities.csv", row.names = FALSE)
+# location_entities=spacy_extract_entity(eq_places$place) %>% filter(ent_type=='GPE') %>% select(doc_id,text) # GPE is spacy code for location entity types
+# 
+# write.csv(location_entities, "location_entities.csv", row.names = FALSE)
 
 ```
 
@@ -1033,6 +1041,44 @@ sdf_earthquake=st_transform(sdf_earthquake, crs=4326)
 #st_write(sdf_earthquake, "sdf_earthquake.gpkg",append=FALSE)
 
 
+```
+
+```{r, tagged_id,eval=TRUE,echo=F}
+#| message: false
+#| warning: false
+#| fig-height: 3.5
+#| fig-width: 6
+#| paged-print: false
+#| fig-cap: "Count of Location-Tagged Earthquake IDs"
+
+tagged_cnts=sdf_earthquake %>% 
+  mutate(
+    tagged_location = case_when(
+      country_final != 'Unknown' ~ 1,
+      country_final == 'Unknown' ~ 0
+    )
+  ) %>% 
+  
+  select(id, country_final, tagged_location) %>% 
+  
+  group_by(tagged_location) %>% 
+  summarize(
+    tagged_cnt = n_distinct(id),
+    .groups = "drop"
+  ) %>% 
+  
+  mutate(
+    pct = (round(tagged_cnt / sum(tagged_cnt),2))*100,
+    
+    tagged_location = factor(
+      tagged_location,
+      levels = c(0,1),
+      labels = c("Not Tagged", "Tagged")
+    )
+  ) %>%  st_drop_geometry() %>% 
+  rename(`tagged status`=tagged_location,`count`=tagged_cnt, `%`=pct )
+
+kable(tagged_cnts,caption='Count of Location-Tagged IDs')
 ```
 
 ```{r,eq_map,eval=F,echo=FALSE,include=FALSE}
@@ -1144,7 +1190,7 @@ st_write(country_geometries, "country_geometries.gpkg")
 country_geometries=st_read('country_geometries.gpkg')
 plot_df=country_geometries %>% group_by(country_final) %>% 
   summarise(mean_magnitude=mean(magnitude))
-#plot(plot_df['mean_magnitude'])
+
 
 plot_df=st_transform(plot_df, 4326)
 
@@ -1165,8 +1211,6 @@ cp=leaflet(plot_df) %>%
 
 ```
 
-![Global distribution of earthquake activity, with countries shaded by average earthquake magnitude.](country_chloropleths.png){#country_chloropleths width="496"}
-
 ```{r,top_countries_plot,eval=T, echo=FALSE}
 
 #| message: false
@@ -1184,39 +1228,37 @@ all_countries <- list_countries()
 p2=sdf_earthquake %>% 
   distinct(id,country_final,magnitude) %>%
   rename(country=country_final) %>% 
+  filter(country!='Unknown') %>% 
    group_by(country) %>%
   summarize(eq_count=n_distinct(id),avg_magnitude=mean(magnitude)) %>%
   arrange(desc(eq_count)) %>%
   head(20) %>%
   ggplot(aes(x=reorder(country,-eq_count),y=eq_count,fill=avg_magnitude))+
   geom_col(stat = 'identity')+
-  labs(title = "Top 20 Countries By Total Number of Earthquke Occurances (1965-2023) ",y='#occurances',
+  labs(title = "Top 20 Countries By Total Number of Earthquke Occurences (1965-2023) ",y='#occurrences',
        x= "Country",fill='mean magnitude') +
   scale_fill_gradient(low = "yellow", high = "red")+
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
 
-
-
-
-p2 
 ```
 
 ```{r,echo=F,eval=T}
 #| message: false
 #| warning: false
 #| fig-height: 5
-#| fig-width: 6
+#| fig-width: 13
 #| paged-print: false
 #| label: fig-barplots8
-#| fig-cap: "12 month average earthquake occurance per country, Colored By Average Magnitude"
+#| fig-cap: "Country Earthquake Counts Colored By Average Magnitude"
 #| 
 country_eq=sdf_earthquake %>% st_drop_geometry() %>%
   mutate(year_=year(date_final)) %>% 
   group_by(country_final,year_,date_final) %>% 
   summarise(nr_eq=n_distinct(id),mean_mag=mean(magnitude))
 
-p2_1=country_eq %>% group_by(country_final,year_) %>% 
+p2_1=country_eq %>%filter %>% filter(country_final!='Unknown') %>% 
+  group_by(country_final,year_) %>% 
   summarize(nr_eq_year=sum(nr_eq),mean_mag=mean(mean_mag)) %>% 
   group_by(country_final) %>% 
   summarise(mean_eq=mean(nr_eq_year),mean_mag=mean(mean_mag)) %>% 
@@ -1224,22 +1266,77 @@ p2_1=country_eq %>% group_by(country_final,year_) %>%
   ggplot(aes(x=reorder(country_final,-mean_eq),y=mean_eq,fill=mean_mag))+
   geom_col()+
    scale_fill_gradient(low = "yellow", high = "red")+
-    labs(title = "Top 20 12 Month Average Earthquake Occurances Per Country ",
-         x='country',y= "mean #occurances",fill = "mean magnitude")+
+    labs(title = "Yearly Average Earthquake Occurances Per Country",
+         x='country',y= "mean yearly #occurances",fill = "mean magnitude")+
   theme_minimal()+
   theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
   
 
-p2_1
+p2|p2_1
 ```
 
-Indonesia has the highest number of recorded earthquakes, whilst the highest average magnitudes are observed for Figi and Ecuador. When split by scale, Indonesia still shows the highest number of occurrences across both Strong and Moderate earthquake types.
+Indonesia has the highest number of recorded earthquakes, whilst the highest average magnitudes are observed for Figi and Ecuador. Despite this, the South Sandwhich Islands report the highest average number of yearly occurences with an average of\~78 earthquakes per year.
 
-```{r,top_countries_plot_scale,eval=T, echo=FALSE}
+```{r,echo=FALSE,eval=F}
+library(stars)
+
+# Convert sf object 'my_sdf' to a stars raster object
+
+ids=sdf_earthquake %>% distinct(id,country_final)
+id_cnt=ids %>% group_by(country_final) %>% summarize(cnt_id=n_distinct(id)) 
+
+
+freq_per_country=plot_df %>% left_join(id_cnt, by='country_final')
+
+#plot(freq_per_country['cnt_id'] )
+
+
+pal = colorNumeric(palette = "YlOrRd", domain = plot_df$cnt_id)
+
+
+cp=leaflet(freq_per_country) %>%
+  addTiles() %>%
+  addPolygons(
+    fillColor = ~pal(cnt_id),
+    weight = 1,
+    opacity = 1,
+    color = "white",
+    fillOpacity = 0.7,
+    label = ~paste0(country_final, ": ",cnt_id) # Tooltip on hover
+  ) %>%
+  addLegend(pal = pal, values = ~cnt_id, opacity = 0.7, title = "#earthquakes", position = "bottomright")
+
+
+                               
+
+```
+
+```{=latex}
+\begin{figure}[H]
+\centering
+
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{country_chloropleths.png}
+\caption{Magnitude Distribution}
+\end{minipage}
+\hfill
+\begin{minipage}{0.48\textwidth}
+\centering
+\includegraphics[width=\linewidth]{eq_occurances.png}
+\caption{Earthquake Frequency}
+\end{minipage}
+
+\end{figure}
+```
+
+In terms of the global magnitude distributions, the highest average recorded magnitudes (magnitudes \>\~6) are mostly clusterd in South America and Asia. North America and Asia report the highest counts of earthquake incidents in the recorded period.
+
+```{r,top_countries_plot_scale,eval=F, echo=FALSE}
 
 #| message: false
 #| warning: false
-#| fig-height: 8
+#| fig-height: 12
 #| fig-width: 6
 #| paged-print: false
 #| label: fig-barplots8
@@ -1271,7 +1368,7 @@ p3=sdf_earthquake %>% mutate(country=case_when(
 p3
 ```
 
-```{r,bubble,eval=T, echo=FALSE}
+```{r,bubble,eval=F, echo=FALSE}
 
 #| message: false
 #| warning: false
@@ -1313,7 +1410,7 @@ bb=sdf_earthquake %>% group_by(country_final) %>%
          color='top 5 countries',size='')+
   theme_minimal()
 
-ggplotly(bb)
+bb
 ```
 
 ```{r,echo=FALSE,eval=TRUE}
@@ -1322,22 +1419,27 @@ ggplotly(bb)
 
 
 
-bc=sdf_earthquake %>% group_by(continent) %>%filter(!is.na(continent)) %>% 
+bc = sdf_earthquake %>% 
+  group_by(continent) %>%
+  filter(!is.na(continent)) %>% 
   mutate(cont_occ_sum = n_distinct(id)) %>%
   ungroup() %>%  
-    mutate(
-    country_final = reorder(continent, -cont_occ_sum)  
-  ) %>% 
-  ggplot(aes(x = nst, y =magnitude, size = cont_occ_sum,color=continent)) +
+  mutate(continent = factor(continent,levels = unique(continent[order(cont_occ_sum)]))) %>% 
+  ggplot(aes(x = nst,y = magnitude,size = cont_occ_sum,color = continent)) +
   geom_point(alpha = 0.5) +  
-  scale_size(range = c(1,5))+
-    labs(title = "Avg Magnitude vs Avg Number of Siesmic Stations (NST)  ",y='magnitude',x= "NST",
-         color='continent',size='')+
+  scale_size(
+    range = c(1,5),
+    name = "#Occurrences"
+  ) +
+  labs(
+    title = "Magnitude vs Number of Seismic Stations (NST), Grouped by Continent",y = "Magnitude",x = "NST",colour = "") +
   theme_minimal()
 
-ggplotly(bc)
+bc
 
 ```
+
+For
 
 ```{r,stat_map,eval=F,echo=FALSE}
 
@@ -1375,4 +1477,10 @@ nrow(indo)
 
 ## References {.appendix}
 
-![Global Earthquake Occurrences (1965-2024)](eq_global_distribution.png){width="762"}
+```{r}
+
+```
+
+```{r}
+
+```
