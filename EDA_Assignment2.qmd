@@ -970,11 +970,13 @@ Overall, earthquake occurrences show relatively uniform distributions/counts tho
 
 # Spatial Analysis
 
-Location/Country Extraction Method:
+Region/Country Extraction Method:
 
--   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column (where available) and save these extracted values in a dataframe/csv file named "location_entities." Then, join this data back to the \`df_earthquake\` dataFrame using the **ID** key. After joining, convert the resultant dataframe into a spatial dataframe.
--   Next, use the built-in **countries** spatial dataframe from the rnaturalearth package, which contains a list of countries and their geometries. Perform a spatial join with \`sdf_earthquake\` using the **st_is_within_distance** predicate, which joins geometries that are within a specified distance of each other. In this case, apply a threshold of 100 kilometers, allowing country locations to be tagged to earthquake IDs that occurred within 100 kilometers of a country's geometry.
--   Finally, tag the location of any IDs that could not be extracted using the aforementioned methods as "Unknown."
+-   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column and save them in a dataframe or CSV file named "location_entities." Merge this data with the df_earthquake dataframe using the **ID** column and convert the result into a spatial dataframe.
+
+-   Utilize the **countries** spatial dataframe from the rnaturalearth package to perform a spatial join with sdf_earthquake using the **st_is_within_distance** predicate with a 100-kilometer threshold. This will link earthquake IDs that occurred within 100 kilometers of a country's geometry.
+
+-   Finally, tag any IDs for which location data could not be extracted as "Unknown."
 
 ```{r,loc_ext_spcy,eval=F, echo=FALSE}
 # Extract eq locations from the place column using spacy
@@ -1439,7 +1441,7 @@ bc
 
 ```
 
-For
+Magnitude and NST values are mostly clustered around 0-5 and 0-200, respectively. Higer values of magnitudes and NST are observed for continents that had higher counts of earthquakes as seen in the Eurasia and South America regions.
 
 ```{r,stat_map,eval=F,echo=FALSE}
 
@@ -1476,11 +1478,3 @@ nrow(indo)
 ```
 
 ## References {.appendix}
-
-```{r}
-
-```
-
-```{r}
-
-```
