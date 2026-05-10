@@ -99,31 +99,31 @@ library(kableExtra)
 # Introduction
 
 This report analyses earthquake data from 1965 to 2023. The data is sourced from the official USGS website and tracks global earthquake occurrences along with their key attributes, including magnitudes (measured using various magnitude types), horizontal distances, depths, approximate locations, and key measurement statistics.\
-Although the time span of the data is quite extensive, the data set is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the data set, two key features have been added. The first is the "Scale" feature, which categorizes earthquake types into magnitude buckets using definitions from the Richter Scale(reference needed). The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilizing Named Entity Recognition from the Spacy package to extract labelled country data directly from the data set. Exploratory insights are divided into three parts:
+Although the time span of the data is quite extensive, the data set is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the data set, two key features have been added.The first is the "Scale" feature, which categorizes earthquake types into magnitude buckets using definitions from the Richter Scale.[^1] . The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilizing Named Entity Recognition from the Spacy package to extract labelled country data directly from the data set. Exploratory insights are divided into three parts:
+
+[^1]: Encyclopaedia Britannica, *Richter Scale*. Available at: <https://www.britannica.com/science/Richter-scale> (Accessed: 10 May 2026).
 
 1.  General Data Analysis: This examines key feature relationships and correlations, primarily factored by the Scale feature.
-
 2.  Temporal Analysis: This focuses on trends in earthquake occurrences over time.
-
 3.  Spatial Analysis: This analyses important earthquake features from both country and regional perspectives.
 
 # Data Wrangling Steps
 
-1.  Convert date columns into for both earthquake and query dataframes: a date_tine column and date column
+1.  Convert date columns into datetime columns for both the earthquake and query data frames.
 
-2.  Lower the case in all the column names in the earthquake dataframe and remove the period,".", character in the column names
+2.  Lower the case in all the column names in the earthquake data frame and remove all non-alphanumeric characters from the column names.
 
-3.  Lower the case of the of the values in the **id** and **type** column in the earthquake dataframe, for easy joining
+3.  Lower the case of the values in the **id** and **type** column in the earthquake data frame for easy joining.
 
-4.  Find column names that are common in both the earthquake and query dataframes, and rename some column names originating from the query dataframe to avoid duplicated column names before joining.
+4.  Find column names that are common in both the earthquake and query data frames, and rename some of these to avoid duplicated column names before joining.
 
-5.  Join the two dataframes using the id,date, and type columns and save this as df.
+5.  Join the two data frames using the **id, date, and type** columns and filter for **type='earthquake'** which gives the final df_earthquake data frame from which the analysis is performed.
 
-6.  Filter for type='earthquake' in the df dataframe, which gives the final df_earthquake dataframe from which the analysis is performed from.
+6.  Replace the NA values in the common columns with values from the corresponding columns the query or earthquake data frames.
 
-7.  Replace in NA values of the common columns with values from the corresponding column in the columns from the query dataframe.
+7.  Create richter_scale column derived from the bucketed magnitude values.[^2]
 
-8.  Create richter_scale column using the category definition from [@usgs_magnitude]. According to the USGS website the magnitude types give the same magnitudes for earthquakes with magnitudes ranging from 6.5 to 7.0. In the combined earthquake dataframe, earthquakes there are 817 earthquake ids that exceed 7, accounting for \~2% of the data. As such, the magnitudes scale categories are defined solely based off the nominal values of the magnitude values themselves.
+[^2]: The USGS states that magnitude types yield similar values for earthquakes between 6.5 and 7.0. In the combined earthquake dataframe, 817 earthquakes exceed a magnitude of 7, making up about 2% of the data. Thus, magnitude scale categories are based solely on nominal values.
 
 ```{r,read_data,echo=FALSE,eval=TRUE}
 
@@ -309,7 +309,7 @@ df_att=data.frame(no.rows=nrow(df_earthquake),
                   date_span= paste(min(df_earthquake$date_final),'-',max(df_earthquake$date_final))
                   )
 
-kable(df_att, caption = "earthquake dataset summary")
+kable(df_att, caption = "df_earthquake dataset summary")
 
 
 ```
@@ -465,13 +465,11 @@ gr_7_cnt/(df_earthquake  %>%
 ```
 
 ```{r,mg_summ,echo=F,eval=T}
-
 #| message: false
 #| warning: false
-#| fig-height: 7
+#| fig-height: 6
 #| fig-width: 10
 #| paged-print: false
-#| label: fig-barplot1
 #| fig-cap: "Counts of Earthquake Counts Per Scale Category"
 
 # Magnitude summary Statistics
@@ -496,7 +494,7 @@ p2/p3_cont
 ```
 
 In total, there have been \~34.1K recorded unique instances of earthquakes from 1965 to 2023, with the majority of these being Moderate earthquakes (magnitudes between 5.0 and 5.99), accounting for \~76% of recorded occurrences.\
-Earthquake are mostly distributed above/ to the right of the median earthquake magnitudes (5.6,moderate); \~60% of occurrences were above the median, whilst \~30% of ids lie above the 75th percentile (5.9) of magnitudes. Only 2% of recorded earthquakes had a magnitude greater than 7.
+Earthquake magnitudes are mostly distributed above/to the right of the median (5.6), with \~60% of occurrences lying above the median. \~30% of ids had magnitudes that exceeded the 75th percentile of 5.9. Only 2% of recorded earthquakes had a magnitude greater than 7.
 
 ```{r,counts,eval=F,echo=F}
 
@@ -534,11 +532,17 @@ sk=df_earthquake %>% distinct(id,magnitude) %>%
 
 **Feature Correlations**
 
-In absolute terms, the number of seismic stations, nst, shows the highest linear correlation with earthquake magnitude at 30%, followed by azimuthal gap at 24% (defined as the largest angle between two adjacent seismic stations measured from an earthquake's epicenter, @azimuthal_gap_researchgate).
+In absolute terms, the number of seismic stations, **nst**, shows the highest linear correlation with earthquake magnitude at 30%, followed by azimuthal gap at 24%[^3].
 
-Root mean square (provides a measure of the fit of the observed arrival times to the predicted arrival times @usgs_rms_metadata) and magnitude error (provides uncertainty in magnitude estimation @usgs_magnitude_uncertainty) show opposite sign individual correlations with respect to the recorded magnitude at 29% and -22%, respectively.
+[^3]: Azimuthal gap is defined as the largest angle between two adjacent seismic stations measured from an earthquake's epicenter (@azimuthal_gap_researchgate).
 
-Aside from directly related variables (e.g., horizontal distance and its error), the azimuthal gap and magnitude error show the strongest correlation (\~ 0.35) among the all other features.
+**Root mean square[^4]**,rms, and **magnitude error[^5]** show opposite sign individual correlations with respect to the recorded magnitude at 29% and -22%, respectively.
+
+[^4]: Provides a measure of the fit of the observed arrival times to the predicted arrival times. See: U.S. Geological Survey metadata.
+
+[^5]: Provides uncertainty in magnitude estimation. See: U.S. Geological Survey metadata.
+
+Aside from related measurement variables (such as horizontal distance and its error), the **azimuthal gap** and **magnitude error** show the strongest correlation (\~ 0.35) among the all other features.
 
 ```{r az_rms_mg,eval=TRUE, echo=FALSE}
 #| message: false
@@ -547,7 +551,6 @@ Aside from directly related variables (e.g., horizontal distance and its error),
 #| fig-width: 8
 #| label: fig-heatmap1
 #| fig-cap: "Feature Correlation Matrix on subset of features"
-
 
 # Also explore relationship etween azimuthal gap,rms and earthqake magnitudes
 library(reshape2)
@@ -564,8 +567,11 @@ geom_tile() +
                        midpoint = 0, limit = c(-1,1), space = "Lab", 
                        name="Pearson\nCorrelation") +
   geom_text(aes(label = round(value, 2)), color = "black")+
-  labs(title = "Feature Correlation Matrix",x='Feature',y='Feature')+
-  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust = 1))
+  labs(title = "Feature Correlation Matrix",x='',y='Feature')+
+  theme(
+    axis.text.x = element_text(size = 14, angle = 45, vjust = 0.9, hjust = 1),
+    axis.text.y = element_text(size = 14)
+  )
 
 
   
@@ -575,7 +581,7 @@ geom_tile() +
 ```{r pairwise_plot,eval=T,echo=F}
 #| message: false
 #| warning: false
-#| fig-height: 9
+#| fig-height: 12.5
 #| fig-width: 15
 #| paged-print: false
 #| label: fig-scatterplot1
@@ -589,7 +595,7 @@ df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,deptherror,
                          #       alpha=0.5))
 ```
 
-When analyzing the shape of distributions and the statistical significance of correlations, we observe the following significant correlations with physical features of earthquakes:
+When analyzing the shape of distributions and the statistical significance of correlations, the following significant correlations with physical features of earthquakes are observed:
 
 -   Horizontal distance: negatively correlated at the 1% level of significance
 
@@ -605,7 +611,7 @@ Additionally, the error associated with the measured magnitude, referred to as m
 
 -   Number of magnitude seismic stations: negatively correlated at the 1% level of significance
 
-**Earthquake Depth and Horizontal Distance Per Scale Category**
+##### **Earthquake Depth and Horizontal Distance Per Scale Category**
 
 ```{r,depth_mag,echo=FALSE,eval=T}
 
@@ -614,7 +620,6 @@ Additionally, the error associated with the measured magnitude, referred to as m
 #| fig-height: 8
 #| fig-width: 12
 #| paged-print: false
-#| label: fig-barplots2
 #| fig-cap: "Average Earthquake Depth Per Scale Category"
 
 
@@ -655,7 +660,6 @@ Major earthquake types record the highest average depth across magnitude scales,
 #| fig-height: 4
 #| fig-width: 5
 #| paged-print: false
-#| label: fig-barplots3
 #| fig-cap: "Average Earthquake Horizontal Distance Per Scale Category"
 
 
@@ -683,7 +687,7 @@ p2=df_earthquake %>% select(horizontaldistance,richter_scale) %>% filter( !is.na
 p2
 ```
 
-\~ 95% (\~32.5K) of IDs have missing values for horizontal depth. Of there remaining 5% ( \~1.5K), the average horizontal distance is highest for moderate earthquake types at 4.33 followed by strong earthquakes at 3.38m\
+\~ 95% (\~32.5K) of IDs have missing values for horizontal depth, of the remaining 5% (\~1.5K), the average horizontal distance is highest for moderate earthquake types at 4.33m followed by strong earthquakes at 3.38m\
 
 ```{r,na_cnt,eval=F,echo=F}
 
@@ -700,7 +704,7 @@ p2
 #| message: false
 #| warning: false
 #| fig-height: 5
-#| fig-width: 10
+#| fig-width: 13
 #| paged-print: false
 #| label: fig-barplots4
 #| fig-cap: "Earthqake occurances over time"
@@ -807,7 +811,6 @@ p6=df_earthquake %>% select(id,date_final,magnitude) %>%
  
 (p1+p1_1)/p5
  
-#ggplotly(p1)
 
 ```
 
@@ -867,11 +870,11 @@ mg_err=df_earthquake %>% distinct(id,date_final,magnitudeerror) %>%
 
 ```
 
-Since 2017, the number of recorded earthquakes has sharply increased, peaking in 2021 with 2,200 occurrences, representing a 135% increase from the previous year- although the average recorded magnitudes showed relative decreases, with the average scale within the moderate scale. The sudden increase also occurs around the same period in which the average number of seismic stations per ID (occurrence) peaking at approximately 112 stations per earthquake ID in 2022; Lower magnitude errors[^1] and root mean square errors[^2] were also observed during this time, indicating improved earthquake detection and measurement sensitivity.
+Since 2017, the number of recorded earthquakes has sharply increased, peaking in 2021 with 2,200 occurrences, representing a 135% increase from the previous year- although the average recorded magnitudes showed relative decreases in the same period (with the average scale within the moderate scale). The sudden increase also occurs around the same period in which the average number of seismic stations per ID (occurrence) peaking at approximately 112 stations per earthquake ID in 2022. Lower magnitude errors[^6] and root mean square errors[^7] were also observed during this time, indicating improved earthquake detection and measurement sensitivity.
 
-[^1]: A statistical measure used to evaluate how well a model predicts earthquake magnitudes.
+[^6]: A statistical measure used to evaluate how well a model predicts earthquake magnitudes.
 
-[^2]: The uncertainty or difference in the measured earthquake magnitude.
+[^7]: The uncertainty or difference in the measured earthquake magnitude.
 
 ```{r,mag_time, eval=TRUE, echo=FALSE}
 
@@ -969,10 +972,8 @@ Overall, earthquake occurrences show relatively uniform distributions/counts tho
 
 Region/Country Extraction Method:
 
--   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column and save them in a dataframe or CSV file named "location_entities." Merge this data with the df_earthquake dataframe using the **ID** column and convert the result into a spatial dataframe.
-
--   Utilize the **countries** spatial dataframe from the rnaturalearth package to perform a spatial join with sdf_earthquake using the **st_is_within_distance** predicate with a 100-kilometer threshold. This will link earthquake IDs that occurred within 100 kilometers of a country's geometry.
-
+-   Use the SpaCy Named Entity Recognition (NER) function to extract locations from the "place" column and save them in a dataframe or CSV file named "location_entities." Merge this data with the df_earthquake dataframe using the **id** column and convert the result into a spatial dataframe.
+-   Use the in-built **countries** spatial dataframe from the rnaturalearth package to perform a spatial join with sdf_earthquake using the **st_is_within_distance** predicate with a 100-kilometer threshold. This will link earthquake IDs that occurred within 100 kilometers of a country's geometry.
 -   Finally, tag any IDs for which location data could not be extracted as "Unknown."
 
 ```{r,loc_ext_spcy,eval=F, echo=FALSE}
@@ -1048,7 +1049,6 @@ sdf_earthquake=st_transform(sdf_earthquake, crs=4326)
 #| fig-height: 3.5
 #| fig-width: 6
 #| paged-print: false
-#| fig-cap: "Count of Location-Tagged Earthquake IDs"
 
 tagged_cnts=sdf_earthquake %>% 
   mutate(
@@ -1246,7 +1246,7 @@ p2=sdf_earthquake %>%
 #| message: false
 #| warning: false
 #| fig-height: 5
-#| fig-width: 13
+#| fig-width: 15
 #| paged-print: false
 #| label: fig-barplots8
 #| fig-cap: "Country Earthquake Counts Colored By Average Magnitude"
@@ -1329,7 +1329,7 @@ cp=leaflet(freq_per_country) %>%
 \end{figure}
 ```
 
-In terms of the global magnitude distributions, the highest average recorded magnitudes (magnitudes \>\~6) are mostly clusterd in South America and Asia. North America and Asia report the highest counts of earthquake incidents in the recorded period.
+In terms of the regional distributions, the highest average recorded magnitudes (\>\~6) are mostly clustered in South America and Asia. North America and Asia report the highest counts of earthquake incidents in the recorded period.
 
 ```{r,top_countries_plot_scale,eval=F, echo=FALSE}
 
@@ -1412,9 +1412,12 @@ bb=sdf_earthquake %>% group_by(country_final) %>%
 bb
 ```
 
-```{r,echo=FALSE,eval=TRUE}
+```{r reg_bbplot,echo=FALSE,eval=TRUE}
 #| message: false
 #| warning: false
+#| fig-height: 4.5
+#| fig-width: 7
+#| fig-cap: "Regional Bubble Plot: Magnitude vs NST"
 
 
 
@@ -1432,13 +1435,22 @@ bc = sdf_earthquake %>%
   ) +
   labs(
     title = "Magnitude vs Number of Seismic Stations (NST), Grouped by Continent",y = "Magnitude",x = "NST",colour = "") +
-  theme_minimal()
+geom_vline(xintercept = round(mean(sdf_earthquake$nst, na.rm = TRUE)),colour = "steelblue",linewidth = 1,linetype = "dashed" )+
+  geom_hline(yintercept = round(mean(sdf_earthquake$magnitude, na.rm = TRUE)),colour = "steelblue" ,linewidth = 1,linetype = "dashed")+
+  annotate("text", x = round(mean(sdf_earthquake$nst,na.rm=T))+0.5, y = 9, label = "mean nst",hjust = -0.1)+
+  annotate("text", x =320 , y = round(mean(sdf_earthquake$magnitude))+0.1, label = "mean magnitude",vjust = -0.5)+
+  theme_minimal()+
+    theme(
+    axis.title.x = element_text(size = 13),
+    axis.title.y = element_text(size = 13))
 
-bc
 
+#
 ```
 
-Magnitude and NST values are mostly clustered around 0-5 and 0-200, respectively. Higer values of magnitudes and NST are observed for continents that had higher counts of earthquakes as seen in the Eurasia and South America regions.
+![Regional Bubble Plot: Magnitude vs NST](bb_plot.png)
+
+Magnitude and NST values are mostly clustered around 0-5 and 0-200, respectively. Higher values of magnitudes and NST (above their respective means) are observed for continents that had higher counts of earthquakes as seen in the Eurasia and South America regions.
 
 ```{r,stat_map,eval=F,echo=FALSE}
 
