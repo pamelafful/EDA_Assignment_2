@@ -156,8 +156,6 @@ query$date_final=date(query$dt_date_time)
 
 # Split data into 2 then put back together
 
-
-
 earth_quakes$dt_date_time=earth_quakes%>% mutate(dt_date_time= mdy_hms(paste(Date,Time))) %>% pull(dt_date_time)
 
 earth_quake_na=earth_quakes %>% filter(is.na(dt_date_time))
@@ -166,7 +164,6 @@ earth_quake_na$dt_date_time=earth_quake_na %>% mutate(dt_date_time=ymd_hms(Date)
 
 earth_quakes_final=rbind(earth_quake_na,earth_quake_non_na)
 earth_quakes_final$date_final=date(earth_quakes_final$dt_date_time)
-
 
 
 ```
@@ -218,7 +215,6 @@ df_earthquake=dplyr::filter(df, `type` =='earthquake')
 
 # Fill in na for some columns
 
-
 df_earthquake=df_earthquake %>% mutate(magnitude=case_when(is.na(magnitude) & !is.na(mag)~ mag,
                                              TRUE ~magnitude
                                              )) %>% mutate(rootmeansquare=case_when(is.na(rootmeansquare) & !is.na(rms)~ rms,
@@ -264,25 +260,27 @@ mutate(status=case_when(is.na(status) & !is.na(status_query)~ status_query,
 ```
 
 ```{r,mag_cat,echo=FALSE,eval=TRUE}
+
+#create richter_scale column
 df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=1 & magnitude<=1.9~'Micro',
+                                                  magnitude>=1 & magnitude<=1.99~'Micro',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=2 & magnitude<=2.9~'Minor',
+                                                  magnitude>=2 & magnitude<=2.99~'Minor',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=3 & magnitude<=3.9~'Slight',
+                                                  magnitude>=3 & magnitude<=3.99~'Slight',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=4 & magnitude<=4.9~'Light',
+                                                  magnitude>=4 & magnitude<=4.99~'Light',
                                                   #magnitudetype=='ML' &
                                                   magnitude>=5 & magnitude<=5.99~'Moderate',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=6 & magnitude<=6.9~'Strong',
+                                                  magnitude>=6 & magnitude<=6.99~'Strong',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=7 & magnitude<=7.9~'Major',
+                                                  magnitude>=7 & magnitude<=7.99~'Major',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=8 & magnitude<=8.9~'Great',
+                                                  magnitude>=8 & magnitude<=8.99~'Great',
                                                   #magnitudetype=='ML' &
-                                                  magnitude>=9 & magnitude<=9.9~'Extreme'
+                                                  magnitude>=9 & magnitude<=9.99~'Extreme'
                                                   #magnitudetype!='ML'~'Other',
                                                   
                                                   
@@ -295,12 +293,19 @@ df_earthquake$richter_scale=df_earthquake %>% mutate(richter_scale=case_when(
 ```
 
 ```{r, drop_cols,eval=TRUE,echo=FALSE}
-# remove redundant columns
+# remove redundant columns or repeated columns
 
 all_cols=names(df_earthquake)
 keep_cols=all_cols[!all_cols %in% c("time.x","dt_date_time_query","date","time.y")]
 
+
+
+
 df_earthquake=df_earthquake %>% select(all_of(keep_cols))
+
+# remove more redunctant, repeated columns
+a = names(df_earthquake)
+df_earthquake=df_earthquake %>% select(all_of(a[!grepl("_query", a)]))
 
 df_att=data.frame(no.rows=nrow(df_earthquake),
                   no.columns=ncol(df_earthquake),
@@ -817,55 +822,120 @@ p6=df_earthquake %>% select(id,date_final,magnitude) %>%
 ```{r,eq_sensitivity,eval=T,echo=F}
 #| message: false
 #| warning: false
-#| fig-height: 3.8
-#| fig-width: 6
+#| fig-height: 5.5
+#| fig-width: 8
 #| paged-print: false
-#| label: fig-barplots49
 #| fig-cap: "Earthqake Measurement Sensitivity"
 
 
-nst_p=df_earthquake %>% distinct(id,date_final,nst) %>% 
+tot=df_earthquake %>% distinct(id,date_final,nst,richter_scale) %>% 
   filter(!is.na(nst)) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
-  summarize(nst_cnt=mean(nst,rm.na=T)) %>% 
-  ggplot(aes(x=year_,y=nst_cnt))+
+  summarize(nst_cnt=mean(nst,na.rm=T)) %>% 
+  mutate(richter_scale='Total')
+
+scale_=  df_earthquake %>% distinct(id,date_final,nst,richter_scale) %>% 
+  filter(!is.na(nst)) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_,richter_scale) %>% 
+  summarize(nst_cnt=mean(nst,na.rm=T)) %>% 
+  select(year_,nst_cnt,richter_scale)
+
+group_colors = c("Total" = "black", "Moderate" = "pink", "Strong" = "green", 'Major'='steelblue')
+
+
+nst_p=rbind(tot,scale_) %>% mutate(richter_scale=factor(richter_scale,levels=c("Total","Moderate","Strong",'Major')    )) %>% 
+  ggplot(aes(x=year_,y=nst_cnt,color=richter_scale))+
   geom_line()+
   geom_point()+
-  labs(title = "Yearly Avg Number of Seismic Stations (nst) Per ID",y='avg nst count',
-       x = "year") +
+  labs(title = "Yearly Avg Number of Seismic Stations (NST) Per ID",y='avg nst count',x = "year",color='scale') +
+  scale_color_manual(values = group_colors)+
   theme_minimal()
 
 
-rms=df_earthquake %>% distinct(id,date_final,rootmeansquare) %>% 
-  filter(!is.na(rootmeansquare)) %>% 
+tot=df_earthquake %>% distinct(id,date_final,rms,richter_scale) %>% filter(!is.na(rms)) %>% 
   mutate(year_=year(date_final)) %>% 
   group_by(year_) %>% 
-  summarize(nst_cnt=mean(rootmeansquare,rm.na=T)) %>% 
-  mutate(
-    pct_change = (nst_cnt - lag(nst_cnt)) / lag(nst_cnt) * 100,
-    moving_pct_change = rollmean(nst_cnt, k = 3, fill = NA, align = "right")) %>% 
-  ggplot(aes(x=year_,y=nst_cnt))+
+  summarize(mean_rms=mean(rms,na.rm=T)) %>% 
+  mutate(richter_scale='Total')
+
+scale_=  df_earthquake %>% distinct(id,date_final,rms,richter_scale) %>% 
+  filter(!is.na(rms)) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_,richter_scale) %>% 
+  summarize(mean_rms=mean(rms,na.rm=T)) %>% 
+  select(year_,mean_rms,richter_scale)
+
+group_colors = c("Total" = "black", "Moderate" = "pink", "Strong" = "green", 'Major'='steelblue','Great'='orange')
+
+
+rms=rbind(tot,scale_) %>% mutate(richter_scale=factor(richter_scale,levels=c("Total","Moderate","Strong",'Major', "Great")    )) %>% 
+  ggplot(aes(x=year_,y=mean_rms,color=richter_scale))+
   geom_line()+
   geom_point()+
-  labs(title = "Yearly Avg Root Mean Sqaure Error Per ID",y='avg rms',
-       x = "year") +
+  labs(title = "Yearly Avg Root Mean Sqaure Error Per ID",y='avg rms',x = "year",color='scale') +
+  scale_color_manual(values = group_colors)+
   theme_minimal()
 
 
-mg_err=df_earthquake %>% distinct(id,date_final,magnitudeerror) %>% 
+tot=df_earthquake %>% distinct(id,date_final,magnitudeerror,richter_scale) %>% filter(!is.na(magnitudeerror)) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(mean_magnitudeerror=mean(magnitudeerror,na.rm=T)) %>% 
+  mutate(richter_scale='Total')
+
+scale_=  df_earthquake %>% distinct(id,date_final,magnitudeerror,richter_scale) %>% 
   filter(!is.na(magnitudeerror)) %>% 
   mutate(year_=year(date_final)) %>% 
-  group_by(year_) %>% 
-  summarize(nst_cnt=mean(magnitudeerror,rm.na=T)) %>% 
-  ggplot(aes(x=year_,y=nst_cnt))+
+  group_by(year_,richter_scale) %>% 
+  summarize(mean_magnitudeerror=mean(magnitudeerror,na.rm=T)) %>% 
+  select(year_,mean_magnitudeerror,richter_scale)
+
+group_colors = c("Total" = "black", "Moderate" = "pink", "Strong" = "green", 'Major'='steelblue','Great'='orange')
+
+
+mg_err=rbind(tot,scale_) %>% mutate(richter_scale=factor(richter_scale,levels=c("Total","Moderate","Strong",'Major', "Great")    )) %>% 
+  ggplot(aes(x=year_,y=mean_magnitudeerror,color=richter_scale))+
   geom_line()+
   geom_point()+
-  labs(title = "Yearly Avg Magnitude Error Per ID",y='avg magnitude error',
-       x = "year") +
+  labs(title = "Yearly Avg Root Mean Sqaure Error Per ID",y='avg magnitude error',x = "year",color='scale') +
+  scale_color_manual(values = group_colors)+
   theme_minimal()
 
+
+
+
 (nst_p/rms/mg_err)
+
+
+```
+
+```{r,eval=F,echo=FALSE}
+tot=df_earthquake %>% distinct(id,date_final,magnitudeerror,richter_scale) %>% filter(!is.na(magnitudeerror)) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_) %>% 
+  summarize(mean_magnitudeerror=mean(magnitudeerror,na.rm=T)) %>% 
+  mutate(richter_scale='Total')
+
+scale_=  df_earthquake %>% distinct(id,date_final,magnitudeerror,richter_scale) %>% 
+  filter(!is.na(magnitudeerror)) %>% 
+  mutate(year_=year(date_final)) %>% 
+  group_by(year_,richter_scale) %>% 
+  summarize(mean_magnitudeerror=mean(magnitudeerror,na.rm=T)) %>% 
+  select(year_,mean_magnitudeerror,richter_scale)
+
+group_colors = c("Total" = "black", "Moderate" = "pink", "Strong" = "green", 'Major'='steelblue','Great'='orange')
+
+
+rbind(tot,scale_) %>% mutate(richter_scale=factor(richter_scale,levels=c("Total","Moderate","Strong",'Major', "Great")    )) %>% 
+  ggplot(aes(x=year_,y=mean_magnitudeerror,color=richter_scale))+
+  geom_line()+
+  geom_point()+
+  labs(title = "Yearly Avg Root Mean Sqaure Error Per ID",y='avg magnitude error',x = "year",color='scale') +
+  scale_color_manual(values = group_colors)+
+  theme_minimal()
+
 
 
 ```
