@@ -99,7 +99,7 @@ library(kableExtra)
 # Introduction
 
 This report analyses earthquake data from 1965 to 2023. The data is sourced from the official USGS website and tracks global earthquake occurrences along with their key attributes, including magnitudes (measured using various magnitude types), horizontal distances, depths, approximate locations, and key measurement statistics.\
-Although the time span of the data is quite extensive, the dataset is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the dataset, two key features have been added. The first is the "Scale" feature, which categorises earthquake types into magnitude buckets using definitions from the Richter Scale(reference needed). The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilising Named Entity Recognition from the Spacy package to extract labelled country data directly from the dataset. Exploratory insights are divided into three parts:
+Although the time span of the data is quite extensive, the data set is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the data set, two key features have been added. The first is the "Scale" feature, which categorizes earthquake types into magnitude buckets using definitions from the Richter Scale(reference needed). The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilizing Named Entity Recognition from the Spacy package to extract labelled country data directly from the data set. Exploratory insights are divided into three parts:
 
 1.  General Data Analysis: This examines key feature relationships and correlations, primarily factored by the Scale feature.
 
@@ -953,11 +953,8 @@ library(ggridges)
 p3=df_earthquake %>% select(dt_date_time,id,magnitude,richter_scale) %>%
   mutate(hr_day=hour(dt_date_time)) %>%
   mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
-  #group_by(hr_day,richter_scale) %>%
-  #summarize(nr_eq=length(id),mean_mg=mean(magnitude)) %>%
   ggplot(aes(x=hr_day,y=richter_scale,fill=richter_scale))+
   geom_density_ridges()+
-  #geom_ridgeline(aes(height=nr_eq))+
   labs(title = "Distributions of Earthquake Occurances By Hour of Day",y='Scale',x= "hour of day") +
   theme_minimal()
 
