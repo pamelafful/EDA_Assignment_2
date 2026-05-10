@@ -6,6 +6,7 @@ format:
   pdf:
     pdf-engine: lualatex
     fig-pos: 'H'
+linestretch: 1.05
 documentclass: article
 include-in-header:
   text: |
@@ -99,7 +100,7 @@ library(kableExtra)
 # Introduction
 
 This report analyses earthquake data from 1965 to 2023. The data is sourced from the official USGS website and tracks global earthquake occurrences along with their key attributes, including magnitudes (measured using various magnitude types), horizontal distances, depths, approximate locations, and key measurement statistics.\
-Although the time span of the data is quite extensive, the data set is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the data set, two key features have been added.The first is the "Scale" feature, which categorizes earthquake types into magnitude buckets using definitions from the Richter Scale.[^1] . The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilizing Named Entity Recognition from the Spacy package to extract labelled country data directly from the data set. Exploratory insights are divided into three parts:
+Although the time span of the data is quite extensive, the data set is significantly sparse across many attributes and observations, with regional and country locations missing for many observations. To enhance the data set, two key features have been added. The first is the "Scale" feature, which categorizes earthquake types into magnitude buckets using definitions from the Richter Scale.[^1] The second involves location extraction techniques that provide approximate country and regional labels for different IDs. This is accomplished through spatial joins using built-in data from the rnaturalearth package, as well as utilizing Named Entity Recognition from the Spacy package to extract labelled country data directly from the data set. Exploratory insights are divided into three parts:
 
 [^1]: Encyclopaedia Britannica, *Richter Scale*. Available at: <https://www.britannica.com/science/Richter-scale> (Accessed: 10 May 2026).
 
@@ -537,22 +538,10 @@ sk=df_earthquake %>% distinct(id,magnitude) %>%
 
 **Feature Correlations**
 
-In absolute terms, the number of seismic stations, **nst**, shows the highest linear correlation with earthquake magnitude at 30%, followed by azimuthal gap at 24%[^3].
-
-[^3]: Azimuthal gap is defined as the largest angle between two adjacent seismic stations measured from an earthquake's epicenter (@azimuthal_gap_researchgate).
-
-**Root mean square[^4]**,rms, and **magnitude error[^5]** show opposite sign individual correlations with respect to the recorded magnitude at 29% and -22%, respectively.
-
-[^4]: Provides a measure of the fit of the observed arrival times to the predicted arrival times. See: U.S. Geological Survey metadata.
-
-[^5]: Provides uncertainty in magnitude estimation. See: U.S. Geological Survey metadata.
-
-Aside from related measurement variables (such as horizontal distance and its error), the **azimuthal gap** and **magnitude error** show the strongest correlation (\~ 0.35) among the all other features.
-
 ```{r az_rms_mg,eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
-#| fig-height: 6
+#| fig-height: 5.45
 #| fig-width: 8
 #| label: fig-heatmap1
 #| fig-cap: "Feature Correlation Matrix on subset of features"
@@ -566,7 +555,7 @@ corr_data=df_earthquake %>% select(azimuthalgap,rootmeansquare,magnitude,depth,d
 
 corr_data_df=melt(corr_data)
 
-corr_data_df %>% ggplot(aes(x=Var2, y=Var1, fill=value))+
+corr_hm=corr_data_df %>% ggplot(aes(x=Var2, y=Var1, fill=value))+
 geom_tile() +
   scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
                        midpoint = 0, limit = c(-1,1), space = "Lab", 
@@ -582,6 +571,20 @@ geom_tile() +
   
 
 ```
+
+![Feature Correlation Matrix on subset of features](corr_heatmap.png){width="341" height="199"}
+
+In absolute terms, the number of seismic stations, **nst**, shows the highest linear correlation with earthquake magnitude at 30%, followed by azimuthal gap at 24%[^3].
+
+[^3]: Azimuthal gap is defined as the largest angle between two adjacent seismic stations measured from an earthquake's epicenter (@azimuthal_gap_researchgate).
+
+**Root mean square**[^4],rms, and **magnitude error**[^5] show opposite sign individual correlations with respect to the recorded magnitude at 29% and -22%, respectively.
+
+[^4]: Provides a measure of the fit of the observed arrival times to the predicted arrival times. See: U.S. Geological Survey metadata.
+
+[^5]: Provides uncertainty in magnitude estimation. See: U.S. Geological Survey metadata.
+
+Aside from related measurement variables (such as horizontal distance and its error), the **azimuthal gap** and **magnitude error** show the strongest correlation (\~ 0.35) among the all other features.
 
 ```{r pairwise_plot,eval=T,echo=F}
 #| message: false
@@ -619,7 +622,6 @@ Additionally, the error associated with the measured magnitude, referred to as m
 ##### **Earthquake Depth and Horizontal Distance Per Scale Category**
 
 ```{r,depth_mag,echo=FALSE,eval=T}
-
 #| message: false
 #| warning: false
 #| fig-height: 8
@@ -659,26 +661,23 @@ p1/p2
 Major earthquake types record the highest average depth across magnitude scales, although the distribution of depth across these scales do not show an immediate significant difference.
 
 ```{r dist_mag, eval=T, echo=FALSE}
-
 #| message: false
 #| warning: false
-#| fig-height: 4
+#| fig-height: 2.5
 #| fig-width: 5
 #| paged-print: false
 #| fig-cap: "Average Earthquake Horizontal Distance Per Scale Category"
 
-
-p1=df_earthquake %>%  
-  select(magnitude,richter_scale,horizontaldistance) %>% 
-    mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
-  #group_by(richter_scale) %>% 
-  #summarize(avg_depth=mean(depth,rm.na=T)) %>% 
-  ggplot(aes(y=horizontaldistance,color=richter_scale))+
-  geom_boxplot() +
-  labs(title = "Earthquake Horizontal Distance Distribution Per Scale",
-       y = 'horizontal distance') +
-  theme_minimal()
-
+# p1=df_earthquake %>%  
+#   select(magnitude,richter_scale,horizontaldistance) %>% 
+#     mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>%
+#   #group_by(richter_scale) %>% 
+#   #summarize(avg_depth=mean(depth,rm.na=T)) %>% 
+#   ggplot(aes(y=horizontaldistance,color=richter_scale))+
+#   geom_boxplot() +
+#   labs(title = "Earthquake Horizontal Distance Distribution Per Scale",
+#        y = 'horizontal distance') +
+#   theme_minimal()
 
 p2=df_earthquake %>% select(horizontaldistance,richter_scale) %>% filter( !is.na(horizontaldistance) ) %>%  
     mutate(richter_scale=factor(richter_scale,levels=c('Micro','Minor','Slight','Light','Moderate','Strong','Major','Great','Extreme'))) %>% 
@@ -708,7 +707,7 @@ p2
 ```{r eq_per_dt, eval=TRUE, echo=FALSE}
 #| message: false
 #| warning: false
-#| fig-height: 5
+#| fig-height: 6.65
 #| fig-width: 13
 #| paged-print: false
 #| label: fig-barplots4
@@ -822,10 +821,10 @@ p6=df_earthquake %>% select(id,date_final,magnitude) %>%
 ```{r,eq_sensitivity,eval=T,echo=F}
 #| message: false
 #| warning: false
-#| fig-height: 5.5
+#| fig-height: 6.5
 #| fig-width: 8
 #| paged-print: false
-#| fig-cap: "Earthqake Measurement Sensitivity"
+#| fig-cap: "Earthqake Measurement Sensitivity Over Time"
 
 
 tot=df_earthquake %>% distinct(id,date_final,nst,richter_scale) %>% 
