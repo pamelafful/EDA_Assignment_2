@@ -336,7 +336,7 @@ col_types=left_join(col_types_df,na_cnt,by='column') %>% rename(feature='column'
 
 feat_mins=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    min(x, na.rm = TRUE)
+    round(min(x, na.rm = TRUE),2)
   } else {
     NA
   }
@@ -344,7 +344,7 @@ feat_mins=sapply(df_earthquake, function(x) {
 
 feat_q1=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    quantile(x, probs = 0.25, na.rm = TRUE)
+    round(quantile(x, probs = 0.25, na.rm = TRUE),2)
   } else {
     NA
   }
@@ -352,7 +352,7 @@ feat_q1=sapply(df_earthquake, function(x) {
 
 feat_mean=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    mean(x,na.rm = TRUE)
+    round(mean(x,na.rm = TRUE),2)
   } else {
     NA
   }
@@ -360,7 +360,7 @@ feat_mean=sapply(df_earthquake, function(x) {
 
 feat_median=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    quantile(x, probs = 0.5, na.rm = TRUE)
+    round(quantile(x, probs = 0.5, na.rm = TRUE),2)
   } else {
     NA
   }
@@ -368,7 +368,7 @@ feat_median=sapply(df_earthquake, function(x) {
 
 feat_q75=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    quantile(x, probs = 0.75, na.rm = TRUE)
+    round(quantile(x, probs = 0.75, na.rm = TRUE),2)
   } else {
     NA
   }
@@ -376,7 +376,7 @@ feat_q75=sapply(df_earthquake, function(x) {
 
 feat_max=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    max(x,na.rm = TRUE)
+    round(max(x,na.rm = TRUE),2)
   } else {
     NA
   }
@@ -384,7 +384,7 @@ feat_max=sapply(df_earthquake, function(x) {
 
 feat_var=sapply(df_earthquake, function(x) {
   if (is.numeric(x)) {
-    var(x, na.rm = TRUE)
+    round(var(x, na.rm = TRUE),2)
   } else {
     NA
   }
@@ -398,7 +398,7 @@ variable_summ=data.frame(feature=names(df_earthquake),
                          `meadian`=unname(feat_median),
                          q75=unname(feat_q75),
                           `max`=unname(feat_max),
-                         `sd`=round(unname(feat_var),2)**0.5
+                         `sd`=round((unname(feat_var))**0.5,2)
                          )
 
 variable_summ=left_join(variable_summ,col_types,by='feature')
@@ -414,12 +414,9 @@ variable_summ=variable_summ %>% filter(!feature %in% c('latitude','longitude','l
 
 ```{r,df_attr,eval=T,echo=FALSE}
 
-kable(na.omit(variable_summ), caption = 'Cleaned Earthquake Dataset Numeric Features Data Summary', format = "latex", booktabs = TRUE) %>%
+# 
+kable(na.omit(variable_summ), caption = 'Cleaned Earthquake Dataset Numeric Features Data Summary',format = "latex", booktabs = TRUE) %>%
   kable_styling(latex_options = c("hold_position","scale_down"))
-
-
-
-
 ```
 
 ```{r,mag_dist,eval=TRUE,echo=F}
